@@ -4,7 +4,7 @@
 ```
 project/
 ├── shared/
-│   ├── State.scala           ← Player, Position, GameState, LoopInfo
+│   ├── State.scala           ← Player, Position, State, GameLoopInfo
 │   ├── Logic.scala           ← update(), colisiones, reglas de juego
 │   └── Protocol.scala        ← mensajes JSON: PlayerMoved, Die, etc.
 │
@@ -13,7 +13,7 @@ project/
 │   ├── Drawer.scala          ← todo lo que toca canvas/ctx
 │   └── InputHandler.scala    ← teclado, mouse, envía mensajes al servidor
 │
-└── server/                   ← JVM, Akka HTTP
+└── server/                   ← Akka HTTP
     ├── Server.scala          ← WebSocket route, rooms, broadcast, ActorSystem
     └── Validator.scala       ← valida inputs antes de aplicar a Logic
 ```
