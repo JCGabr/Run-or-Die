@@ -1,5 +1,8 @@
 val scalaVersionUsed = "3.8.3"
 
+val AkkaVersion = "2.10.11"
+val AkkaHttpVersion = "10.7.4"
+
 lazy val shared = crossProject(JSPlatform, JVMPlatform)
     .crossType(CrossType.Pure)
     .in(file("shared"))
@@ -28,5 +31,9 @@ lazy val server = project
     .dependsOn(shared.jvm)
     .settings(
         scalaVersion := scalaVersionUsed,
-        libraryDependencies ++= Seq()
+        libraryDependencies ++= Seq(
+            "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
+            "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+            "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion
+        )
     )
