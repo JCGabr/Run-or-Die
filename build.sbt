@@ -1,13 +1,12 @@
-val scalaVersionUsed = "3.8.3"
+ThisBuild / scalaVersion := "3.8.3"
 
-val AkkaVersion = "2.10.11"
-val AkkaHttpVersion = "10.7.4"
+val PekkoVersion = "1.1.5"
+val PekkoHttpVersion = "1.3.0"
 
 lazy val shared = crossProject(JSPlatform, JVMPlatform)
     .crossType(CrossType.Pure)
     .in(file("shared"))
     .settings(
-        scalaVersion := scalaVersionUsed,
         libraryDependencies ++= Seq()
     )
 
@@ -16,7 +15,6 @@ lazy val client = project
     .enablePlugins(ScalaJSPlugin)
     .dependsOn(shared.js)
     .settings(
-        scalaVersion := scalaVersionUsed,
         scalaJSUseMainModuleInitializer := true,
         scalaJSLinkerConfig ~= {_.withModuleKind(ModuleKind.ESModule)},
 
@@ -30,10 +28,9 @@ lazy val server = project
     .in(file("server"))
     .dependsOn(shared.jvm)
     .settings(
-        scalaVersion := scalaVersionUsed,
         libraryDependencies ++= Seq(
-            "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
-            "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-            "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion
+            "org.apache.pekko" %% "pekko-actor-typed" % PekkoVersion,
+            "org.apache.pekko" %% "pekko-stream" % PekkoVersion,
+            "org.apache.pekko" %% "pekko-http" % PekkoHttpVersion
         )
     )
