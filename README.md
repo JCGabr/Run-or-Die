@@ -19,8 +19,17 @@ project/
 ```
 ## Compilar
 
+Compila el JS
 ```
 sbt fastLinkJS
+```
+
+Compila modulo especifico
+
+```
+sbt "server/run"
+sbt "client/run"
+sbt "shared/run"
 ```
 
 ## Output 
