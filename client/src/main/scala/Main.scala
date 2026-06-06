@@ -15,9 +15,6 @@ object Main:
     }
 
     def main(args: Array[String]): Unit = {
-        val mapgame: MapGame = new MapGame(10, 0, 10, 0)
-        mapgame.generate()
-
         dom.window.requestAnimationFrame(startTime =>
             dom.window.requestAnimationFrame(dt =>
                 gameLoop(GameLoopInfo(dt, startTime))
