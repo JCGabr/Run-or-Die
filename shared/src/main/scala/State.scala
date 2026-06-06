@@ -12,82 +12,60 @@ object Constants{
     val SEGMENT_SIZE = 30
 
     val SEGMENTS: Map[String, Segment] =
-        Map(
-            "sky" -> Segment(
-            id = "sky",
+    Map(
+        "empty" -> Segment(
+            id = "empty",
             right_weights = Map(
-                "sky" -> 0.995f,
-                "grass" -> 0.001f,
-                "forest" -> 0.002f,
-                "water" -> 0.001f
+                "empty" -> 0.997f,
+                "ground" -> 0.002f,
+                "platform" -> 0.001f
             ),
             bottom_weights = Map(
-                "sky" -> 0.8f,
-                "grass" -> 0.3f,
-                "forest" -> 0.3f,
-                "water" -> 0.2f
+                "empty" -> 0.7f,
+                "ground" -> 0.2f,
+                "platform" -> 0.1f
             )
-            ),
-            "grass" -> Segment(
-            id = "grass",
+        ),
+        "ground" -> Segment(
+            id = "ground",
             right_weights = Map(
-                "sky" -> 0.2f,
-                "grass" -> 0.7f,
-                "forest" -> 0.2f,
-                "water" -> 0.1f
+                "empty" -> 0.1f,
+                "ground" -> 0.8f,
+                "platform" -> 0.1f
             ),
             bottom_weights = Map(
-                "sky" -> 0.2f,
-                "grass" -> 0.6f,
-                "forest" -> 0.3f,
-                "water" -> 0.1f
+                "empty" -> 0.0f,
+                "ground" -> 1.0f,
+                "platform" -> 0.0f
             )
-            ),
-
-            "forest" -> Segment(
-            id = "forest",
+        ),
+        "platform" -> Segment(
+            id = "platform",
             right_weights = Map(
-                "sky" -> 0.2f,
-                "forest" -> 0.6f,
-                "grass" -> 0.3f,
-                "mountain" -> 0.1f
+                "empty" -> 0.4f,
+                "ground" -> 0.2f,
+                "platform" -> 0.4f
             ),
             bottom_weights = Map(
-                "sky" -> 0.2f,
-                "forest" -> 0.7f,
-                "grass" -> 0.2f,
-                "mountain" -> 0.1f
+                "empty" -> 0.65f,
+                "ground" -> 0.0f,
+                "platform" -> 0.05f
             )
-            ),
-
-            "water" -> Segment(
-            id = "water",
+        ),
+        "platform_checkpoint" -> Segment(
+            id = "platform",
             right_weights = Map(
-                "sky" -> 0.2f,
-                "water" -> 0.8f,
-                "grass" -> 0.2f
+                "empty" -> 0.4f,
+                "ground" -> 0.2f,
+                "platform" -> 0.4f
             ),
             bottom_weights = Map(
-                "sky" -> 0.2f,
-                "water" -> 0.8f,
-                "grass" -> 0.2f
-            )
-            ),
-
-            "mountain" -> Segment(
-            id = "mountain",
-            right_weights = Map(
-                "sky" -> 0.2f,
-                "mountain" -> 0.7f,
-                "forest" -> 0.3f
-            ),
-            bottom_weights = Map(
-                "sky" -> 0.2f,
-                "mountain" -> 0.8f,
-                "forest" -> 0.2f
-            )
+                "empty" -> 0.65f,
+                "ground" -> 0.0f,
+                "platform" -> 0.05f
             )
         )
+    )
 }
 
 
@@ -130,7 +108,7 @@ class MapGame
     @tailrec
     private final def weightedRandomAuxiliar(random: Float, map_probability: Seq[(String, Float)]): String = {
         map_probability match{
-            case Nil => "sky"
+            case Nil => "empty"
             case (name, _) :: Nil => name
             case (name, weight) :: tail => 
                 if (random <= weight) 
@@ -141,41 +119,31 @@ class MapGame
     }
 
     def weightedRandom(map_probability: Map[String, Float]): String = {
+        val filtered = map_probability.filter { case (_, v) => v > 0.0f }
+        if (filtered.isEmpty) return "empty"
         val totalWeight: Float = map_probability.values.sum
         val random: Float = Random.between(0.0f, totalWeight)
         weightedRandomAuxiliar(random, map_probability.toSeq)
     }
 
-    def adjustWeightByY(map_probability: Map[String,Float], y: Int): Map[String, Float] ={
+    def adjustWeightByY(map_probability: Map[String, Float], y: Int, fromTile: String): Map[String, Float] = {
         val multipliers: Map[String,Float] =
-            if (y <= 5){
-                Map(
-                    "sky" -> 15.75f, 
-                    "grass" -> 0.75f, 
-                    "forest" -> 0.6f, 
-                    "water" -> 0.5f, 
-                    "mountain" -> 0.25f
-                    )
-            }else if(y >= 6){
-                Map(
-                    "sky" -> 0.1f,
-                    "grass" -> 4.0f, 
-                    "forest" -> 3.0f, 
-                    "water" -> 2.0f, 
-                    "mountain" -> 1.5f
-                    )
-            }else{
-                map_probability.map { case (k, _) => k -> 1.0f }
+            if (y <= (max_y - 5) || y == 8) {
+                Map("empty" -> 20.0f, "ground" -> 0.0f, "platform" -> 0.0f)
+            } else if (y == 6 || y == 7) {
+                Map("empty" -> 3.0f, "ground" -> 0.0f, "platform" -> 4.0f)
+            } else {
+                Map("empty" -> 0.0f, "ground" -> 15.0f, "platform" -> 0.0f)
             }
-
         map_probability.map{
             case (k, v) =>
                 k -> (v * multipliers.getOrElse(k, 1.0f))
         }
     }
 
-    def generate(): Unit = {
-        val root: Segment = Constants.SEGMENTS("sky")
+    def generate():  Vector[Vector[Segment]] = {
+        // checkpoint, trampas
+        val root: Segment = Constants.SEGMENTS("empty")
 
         val matriz: Vector[Vector[Segment]] =
             (0 to max_y).foldLeft(Vector.empty[Vector[Segment]]) { (rows, y) =>
@@ -188,11 +156,12 @@ class MapGame
                             root
                         else if (y == 0) {
                             val left = currentRow(x - 1)
-                            Constants.SEGMENTS(weightedRandom(adjustWeightByY(left.right_weights, y)))
+                            Constants.SEGMENTS(weightedRandom(adjustWeightByY(left.right_weights, y, left.id))) //platform
+                            // funcion(id, val1, val2 )
 
                         } else if (x == 0) {
                             val up = rows(y - 1)(0)
-                            Constants.SEGMENTS(weightedRandom(adjustWeightByY(up.bottom_weights, y)))
+                            Constants.SEGMENTS(weightedRandom(adjustWeightByY(up.bottom_weights, y, up.id)))
 
                         } else {
                             val left  = currentRow(x - 1)
@@ -207,7 +176,7 @@ class MapGame
                             if (new_weights.isEmpty) 
                                 left
                             else 
-                                Constants.SEGMENTS(weightedRandom(adjustWeightByY(new_weights, y)))
+                                Constants.SEGMENTS(weightedRandom(adjustWeightByY(new_weights, y, up.id)))
                         }
 
                     currentRow :+ segment
@@ -216,10 +185,10 @@ class MapGame
                 rows :+ row
             }
 
-        matriz.foreach { row =>
+        /*matriz.foreach { row =>
             println(row.map(_.id).mkString(" | "))
-        }
+        }*/
+        matriz
     }
-
 }
 
