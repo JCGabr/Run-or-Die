@@ -277,7 +277,7 @@ class MapGame
 //----------------------Métricas-----------------------
     def consecutiveEmptyAtEnd(row: Vector[Segment]): Int = {
         row.reverse
-            .takeWhile(isEmpty())
+            .takeWhile(isEmpty)
             .length
     }
 
