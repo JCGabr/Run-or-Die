@@ -8,6 +8,16 @@ object Drawer:
     val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]        
     val mapgame: MapGame = new MapGame(20, 0, 10, 0)
     val matriz = mapgame.generate()
+    val cells = expand(matriz)
+
+    def expand(matriz: Vector[Vector[Segment]]): Vector[Vector[String]] =
+        matriz.flatMap { row =>
+            val patterns = row.map(_.pattern)
+            (0 until 2).map { py =>
+                patterns.flatMap(pattern => pattern(py))
+            }
+        }
+    
     def render(delta_time: Double): Unit = {
         // Ajustar el tamaño interno del canvas al tamaño visual
         canvas.width = canvas.clientWidth
@@ -26,6 +36,13 @@ object Drawer:
 
         val tileSize = math.min(tileSizeX, tileSizeY)
         
+        val cellPx = (Constants.BLOCK_SIZE * Constants.SEGMENT_SIZE) / 2
+
+        val scale = tileSize.toDouble / cellPx
+
+        ctx.save()
+        ctx.scale(scale, scale) 
+
         matriz.zipWithIndex.foreach { case (row, y) =>
             row.zipWithIndex.foreach { case (segment, x) =>
 
@@ -44,16 +61,24 @@ object Drawer:
                                 }
 
                                 ctx.fillRect(
-                                    (x * 2 + px) * tileSize,
-                                    (y * 2 + py) * tileSize,
-                                    tileSize,
-                                    tileSize
+                                    (x * 2 + px) * cellPx,
+                                    (y * 2 + py) * cellPx,
+                                    cellPx,
+                                    cellPx
                                 )
                         }
                 }
             }
         }
-
+        ctx.fillStyle = "#1534e0"
+        ctx.fillRect(
+            Logic.player.coords.x,
+            Logic.player.coords.y,
+            Logic.player.stats.size.x,
+            Logic.player.stats.size.y
+        )
+        
+        ctx.restore()
         /*
         matriz.zipWithIndex.foreach { case (row, y) =>
             row.zipWithIndex.foreach { case (segment, x) =>
