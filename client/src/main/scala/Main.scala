@@ -8,7 +8,7 @@ object Main:
         
         Drawer.render(delta_time)
         
-        Logic.update(InputHandler.getInput(1), delta_time)
+        Logic.update(InputHandler.getInput(), delta_time)
 
         //llamada cuando el frame se encuentre disponible
         dom.window.requestAnimationFrame( dt => { gameLoop(GameLoopInfo(dt, loop_info.current_time)) })
