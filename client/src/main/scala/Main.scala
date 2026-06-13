@@ -16,7 +16,7 @@ object Main:
 
     def main(args: Array[String]): Unit = {
         val initialPlayer = Player(
-            coords = Vector2(50f, 100f),
+            coords = Vector2(0f, 200f),
             velocity = Vector2(0f, 0f),
             current_time = 300f,
             max_time = 30f,
