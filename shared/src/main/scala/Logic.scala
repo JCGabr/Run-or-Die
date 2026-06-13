@@ -1,8 +1,9 @@
+import scala.compiletime.uninitialized
 
 object Logic:
 
-    var player: Player = _
-    var map: Vector[Vector[String]] = _
+    var player: Player = uninitialized
+    var map: Vector[Vector[String]] = uninitialized
 
     def init(p: Player, m: Vector[Vector[String]]): Unit = {
         player = p

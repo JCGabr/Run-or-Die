@@ -7,7 +7,9 @@ lazy val shared = crossProject(JSPlatform, JVMPlatform)
     .crossType(CrossType.Pure)
     .in(file("shared"))
     .settings(
-        libraryDependencies ++= Seq()
+        libraryDependencies ++= Seq(
+            "com.lihaoyi" %%% "upickle" % "3.3.1"
+        )
     )
 
 lazy val client = project
@@ -29,8 +31,9 @@ lazy val server = project
     .dependsOn(shared.jvm)
     .settings(
         libraryDependencies ++= Seq(
-            "org.apache.pekko" %% "pekko-actor-typed" % PekkoVersion,
-            "org.apache.pekko" %% "pekko-stream" % PekkoVersion,
-            "org.apache.pekko" %% "pekko-http" % PekkoHttpVersion
+            "org.typelevel" %% "cats-effect" % "3.7.0",
+            "co.fs2" %% "fs2-core" % "3.13.0",
+            "org.http4s" %% "http4s-ember-server" % "0.23.34",
+            "org.http4s" %% "http4s-dsl" % "0.23.34"
         )
     )
