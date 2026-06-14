@@ -175,7 +175,7 @@ object Main extends IOApp.Simple {
 
     def startGame(events:  Queue[IO, Event], senders: Map[String, String => IO[Unit]], clients: Map[String, Client]): IO[Unit] =
         IO {
-            val rawMap = new MapGame(20, 0, 10, 0).generate()
+            val rawMap = new MapGame(500, 0, 30, 0).generate()
             val map = AppState.expand(rawMap)
 
             val players = clients.values.zipWithIndex.map { 
@@ -191,7 +191,7 @@ object Main extends IOApp.Simple {
                 clients.values.toList.traverse_ { 
                     c =>
                         val pos = players(c.id).player.coords
-                        senders.get(c.id).fold(IO.unit)(_(write[ServerMsg](GameStarted(map, pos.x, pos.y))))
+                        senders.get(c.id).fold(IO.unit)(_(write[ServerMsg](GameStarted(map, c.id))))
                 } >>
                 ticker(events).flatMap { fiber =>
                     stateMachine(events, senders, InGame(clients, players, map), Some(fiber))
@@ -199,7 +199,7 @@ object Main extends IOApp.Simple {
         }
 
     def ticker(events: Queue[IO, Event]): IO[FiberIO[Unit]] = {
-        (IO.sleep(16.milliseconds) >> events.offer(Tick))
+        (IO.sleep(8.milliseconds) >> events.offer(Tick))
             .foreverM
             .as(())
             .start
