@@ -23,9 +23,9 @@ object Main {
 
     def loop(lobby: dom.WebSocket, phase: ClientPhase, players: List[PlayerSnap], current: Double, last: Double): Unit = {
         phase match {
-            case InGame(map, _) =>
+            case InGame(map, myId) =>
                 val dt = (current - last) / 1000.0
-                Drawer.render(map, players, dt)
+                Drawer.render(map, players, myId, dt)
                 lobby.send(write[ClientMsg](SendInput(InputHandler.getInput())))
             case InLobby => ()
         }
@@ -43,8 +43,8 @@ object Main {
                 currentPhase = InLobby
                 renderLobby(lobby, ps)
 
-            case GameStarted(map, x, y) =>
-                val myId = "local"
+            case GameStarted(map, myId) =>
+                //val myId = "local"
                 currentPhase = InGame(map, myId)
                 hideLobby()
 
