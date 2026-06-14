@@ -1,5 +1,6 @@
 import scala.util.Random
 import scala.annotation.tailrec
+import upickle.default.*
 
 case class GameLoopInfo(
     current_time: Double,
@@ -342,7 +343,7 @@ case class InputState(
     moveLeft: Boolean = false,
     moveRight: Boolean = false,
     jump: Boolean = false
-)
+) derives ReadWriter
 
 case class PlayerStats(
     speed: Float,

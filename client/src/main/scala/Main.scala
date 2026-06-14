@@ -1,35 +1,104 @@
 import org.scalajs.dom
+import org.scalajs.dom.html
+import org.scalajs.dom.document
+import upickle.default.*
 
-object Main:
+sealed trait ClientPhase
+case object InLobby extends ClientPhase
+case class InGame(map: Vector[Vector[String]], myId: String) extends ClientPhase
 
-    def gameLoop(loop_info: GameLoopInfo): Unit ={
-        // Genera independencia de los fps del navegador    
-        val delta_time = (loop_info.current_time - loop_info.last_time) / 1000.0
-        
-        Drawer.render(delta_time)
-        
-        Logic.update(InputHandler.getInput(), delta_time)
-
-        //llamada cuando el frame se encuentre disponible
-        dom.window.requestAnimationFrame( dt => { gameLoop(GameLoopInfo(dt, loop_info.current_time)) })
-    }
+object Main {
 
     def main(args: Array[String]): Unit = {
-        val initialPlayer = Player(
-            coords = Vector2(0f, 200f),
-            velocity = Vector2(0f, 0f),
-            current_time = 300f,
-            max_time = 30f,
-            stats = Constants.CHARACTERS("Gnome"),
-            is_grounded = false,
-            is_alive = true
-        )
-        Logic.init(initialPlayer, Drawer.cells)
-        
+        val name = dom.window.prompt("Tu nombre:").nn
+        val ip = dom.window.prompt("Ip a conectar: ").nn
+        val lobby = new dom.WebSocket("ws://"+ ip +":9000/lobby")
+
+        lobby.onopen = _ => lobby.send(write[ClientMsg](JoinLobby(name)))
+        lobby.onmessage = e => dispatch(lobby, read[ServerMsg](e.data.toString), InLobby, List.empty)
+
         InputHandler.init()
-        dom.window.requestAnimationFrame(startTime =>
-            dom.window.requestAnimationFrame(dt =>
-                gameLoop(GameLoopInfo(dt, startTime))
-            )
-        )
+        loop(lobby, InLobby, List.empty, 0, 0)
     }
+
+    def loop(lobby: dom.WebSocket, phase: ClientPhase, players: List[PlayerSnap], current: Double, last: Double): Unit = {
+        phase match {
+            case InGame(map, _) =>
+                val dt = (current - last) / 1000.0
+                Drawer.render(map, players, dt)
+                lobby.send(write[ClientMsg](SendInput(InputHandler.getInput())))
+            case InLobby => ()
+        }
+        dom.window.requestAnimationFrame { t =>
+            loop(lobby, currentPhase, currentPlayers, t, current)
+        }
+    }
+
+    private var currentPhase: ClientPhase = InLobby
+    private var currentPlayers: List[PlayerSnap] = List.empty
+
+    def dispatch(lobby: dom.WebSocket,msg: ServerMsg, phase: ClientPhase, players: List[PlayerSnap]): Unit = {
+        msg match {
+            case LobbyUpdate(ps) =>
+                currentPhase = InLobby
+                renderLobby(lobby, ps)
+
+            case GameStarted(map, x, y) =>
+                val myId = "local"
+                currentPhase = InGame(map, myId)
+                hideLobby()
+
+            case GameTick(ps) =>
+                currentPlayers = ps
+
+            case GameEnded() =>
+                currentPhase   = InLobby
+                currentPlayers = List.empty
+        }
+    }
+
+    def renderLobby(lobby: dom.WebSocket, ps: List[LobbyPlayer]): Unit = {
+        val element = getOrCreate("lobby-overlay",
+            "position:fixed;top:0;left:0;width:100%;height:100%;" +
+            "background:#111;color:#fff;display:flex;flex-direction:column;" +
+            "align-items:center;justify-content:center;gap:12px;z-index:10")
+
+        element.innerHTML =
+            "<h2>Lobby</h2>" +
+            ps.map(p => s"<div>${p.name} | ${p.char.getOrElse("-")} | ${if(p.ready) "Ready" else "Pendiente"}</div>").mkString +
+            "<hr/>" +
+            Constants.CHARACTERS.keys.map(c =>
+            s"""<button id="char-$c" style="margin:4px;padding:8px 16px">$c</button>"""
+            ).mkString(" ") +
+            """<button id="ready-btn" style="margin-top:8px;padding:12px 32px">¡Listo!</button>"""
+
+        Constants.CHARACTERS.keys.foreach { 
+            c =>
+                Option(document.getElementById(s"char-$c")).foreach {
+                    _.asInstanceOf[html.Button].onclick = _ => 
+                        lobby.send(write[ClientMsg](SelectCharacter(c)))
+            }
+        }
+
+        Option(document.getElementById("ready-btn")).foreach {
+            _.asInstanceOf[html.Button].onclick = _ => 
+                lobby.send(write[ClientMsg](SetReady(true)))
+        }
+    }
+
+    def hideLobby(): Unit ={
+        Option(document.getElementById("lobby-overlay")).foreach(_.remove())
+    }
+
+    def getOrCreate(id: String, style: String): html.Div ={
+        Option(document.getElementById(id))
+            .map(_.asInstanceOf[html.Div])
+            .getOrElse {
+                val d = document.createElement("div").asInstanceOf[html.Div]
+                d.id = id
+                d.style.cssText = style
+                document.body.appendChild(d)
+                d
+            }
+    }
+}
