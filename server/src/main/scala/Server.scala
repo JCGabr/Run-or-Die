@@ -148,7 +148,7 @@ object Main extends IOApp.Simple {
                     case (InGame(clients, players, map, lastTick), Tick) =>
                         val snaps = players.values.map(
                             p =>
-                                PlayerSnap(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive)
+                                PlayerSnap(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)
                         ).toList
                         val allDead = players.values.forall(!_.player.is_alive)
 

@@ -337,10 +337,9 @@ object Constants{
 
     val CHARACTERS: Map[String, PlayerStats] =
     Map(
-        "Crumb" -> PlayerStats(speed = 100f, jumpForce = -200f, size = Vector2(10f, 10f)),
-        "Spider" -> PlayerStats(speed = 100, jumpForce = -250f, size = Vector2(10f, 20f)),
+        "Crumb" -> PlayerStats(speed = 120f, jumpForce = -200f, size = Vector2(9f, 9f)),
+        "Spider" -> PlayerStats(speed = 120, jumpForce = -250f, size = Vector2(9f, 18f)),
         "Gnome" -> PlayerStats(speed = 120, jumpForce = -200, size = Vector2(9f, 9f))
-        // gnome solo sufrira el 50% de las penalizaciones de tiempo?
     )
 }
 

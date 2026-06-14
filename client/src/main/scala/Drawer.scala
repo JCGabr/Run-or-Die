@@ -49,8 +49,8 @@ object Drawer:
             ctx.fillRect(
                 p.x,
                 p.y,
-                9,
-                9
+                p.sizeX,
+                p.sizeY
             )
         }
         

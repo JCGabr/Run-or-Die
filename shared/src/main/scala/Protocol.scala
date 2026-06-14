@@ -13,4 +13,4 @@ case class GameTick(players: List[PlayerSnap]) extends ServerMsg
 case class GameEnded() extends ServerMsg
 
 case class LobbyPlayer(id: String, name: String, char: Option[String], ready: Boolean) derives ReadWriter
-case class PlayerSnap(id: String, x: Float, y: Float, alive: Boolean) derives ReadWriter
+case class PlayerSnap(id: String, x: Float, y: Float, alive: Boolean, sizeX: Float, sizeY: Float) derives ReadWriter
