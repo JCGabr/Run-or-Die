@@ -17,25 +17,17 @@ object Drawer:
 
         val visibleCols = 50.0
 
-        val scale =
-            canvas.width.toDouble /
-            (visibleCols * cellPx)
+        val scale = canvas.width.toDouble / (visibleCols * cellPx)
 
-        val visibleRows =
-            canvas.height.toDouble /
-            (cellPx * scale)
+        val visibleRows = canvas.height.toDouble / (cellPx * scale)
 
-        val worldWidth =
-            map.head.length * cellPx
+        val worldWidth = map.head.length * cellPx
 
-        val worldHeight =
-            map.length * cellPx
+        val worldHeight = map.length * cellPx
 
-        val viewWidth =
-            canvas.width / scale
+        val viewWidth = canvas.width / scale
 
-        val viewHeight =
-            canvas.height / scale
+        val viewHeight = canvas.height / scale
 
         val rawCameraX =
             me.map(_.x - (viewWidth / 2).toFloat)
@@ -54,21 +46,6 @@ object Drawer:
             rawCameraY
                 .max(0f)
                 .min((worldHeight - viewHeight).toFloat)
-
-        /*val cameraX = me.map(_.x - 100f).getOrElse(0f)
-        val cameraY = me.map(_.y - 75f).getOrElse(0f)
-
-        val totalCols = map.head.length
-        val totalRows = map.length
-
-        val tileSizeX = canvas.width / totalCols
-        val tileSizeY = canvas.height / totalRows
-
-        val tileSize = math.min(tileSizeX, tileSizeY)
-        
-        val cellPx = (Constants.BLOCK_SIZE * Constants.SEGMENT_SIZE) / 2
-
-        val scale = tileSize.toDouble / cellPx*/
 
         ctx.save()
         ctx.scale(scale, scale) 
