@@ -8,7 +8,7 @@ case class SendInput(input: InputState) extends ClientMsg
 
 sealed trait ServerMsg derives ReadWriter
 case class LobbyUpdate(players: List[LobbyPlayer]) extends ServerMsg
-case class GameStarted(map: Vector[Vector[String]], myX: Float, myY: Float) extends ServerMsg
+case class GameStarted(map: Vector[Vector[String]], myId: String) extends ServerMsg
 case class GameTick(players: List[PlayerSnap]) extends ServerMsg
 case class GameEnded() extends ServerMsg
 
