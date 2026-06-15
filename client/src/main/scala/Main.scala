@@ -13,7 +13,6 @@ object Main {
     private var current_players: List[PlayerSnap] = List.empty
 
     def main(args: Array[String]): Unit = {
-        InputHandler.init()
         Option(document.getElementById("join-btn")).foreach {
             _.asInstanceOf[html.Button].onclick = _ => connect()
         }
@@ -30,6 +29,8 @@ object Main {
 
         val ws = new dom.WebSocket(s"ws://$ip:9000/lobby")
 
+        InputHandler.init(msg => ws.send(write[ClientMsg](msg)))
+
         ws.onopen = _ => {
             hideLogin()
             ws.send(write[ClientMsg](JoinLobby(name)))
@@ -45,7 +46,6 @@ object Main {
             case InGame(map, myId) =>
                 val dt = (current - last) / 1000.0
                 Drawer.render(map, current_players, myId, dt)
-                ws.send(write[ClientMsg](SendInput(InputHandler.getInput())))
             case InLobby => ()
         }
         dom.window.requestAnimationFrame { t =>
