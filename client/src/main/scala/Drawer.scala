@@ -117,8 +117,8 @@ object Drawer:
             val current_seconds = p.current_time.toInt
             val max_seconds = p.max_time.toInt
 
-            val current_label = f"${current_seconds / 60}%02d:${current_seconds % 60}%02d"
-            val max_label = f"${max_seconds / 60}%02d:${max_seconds % 60}%02d"
+            val current_label = f"${current_seconds % 60}s"
+            val max_label = f"${max_seconds % 60}s"
 
             val box_width = 120
             val box_height = 48
