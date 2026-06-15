@@ -7,7 +7,7 @@ object Drawer:
     val canvas = document.getElementById("window-game").asInstanceOf[html.Canvas]
     val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]        
     val bg = document.getElementById("bg").asInstanceOf[html.Image]
-    def render(map: Vector[Vector[String]], players: List[PlayerSnap], myId: String, delta_time: Double): Unit = {
+    def render(map: Vector[Vector[String]], players: List[PlayerMemento], myId: String, delta_time: Double): Unit = {
         canvas.width = canvas.clientWidth
         canvas.height = canvas.clientHeight
 

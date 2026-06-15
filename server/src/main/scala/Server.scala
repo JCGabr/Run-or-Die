@@ -165,7 +165,7 @@ object Main extends IOApp.Simple {
 
                         val updatedPlayers = players.map { case (id, igp) => id -> igp.copy(player = igp.player.update(igp.lastInput, dt, map)) }
 
-                        val snaps = updatedPlayers.values.map(p => PlayerSnap(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)).toList
+                        val snaps = updatedPlayers.values.map(p => PlayerMemento(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)).toList
 
                         val allDead = updatedPlayers.values.forall(!_.player.is_alive)
 

@@ -10,7 +10,7 @@ case class InGame(map: Vector[Vector[String]], myId: String) extends ClientPhase
 object Main {
 
     private var current_phase: ClientPhase = InLobby
-    private var current_players: List[PlayerSnap] = List.empty
+    private var current_players: List[PlayerMemento] = List.empty
 
     def main(args: Array[String]): Unit = {
         Option(document.getElementById("join-btn")).foreach {
