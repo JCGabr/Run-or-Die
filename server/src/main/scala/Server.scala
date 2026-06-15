@@ -145,16 +145,16 @@ object Main extends IOApp.Simple {
 
                     case (InGame(clients, players, map, lastTick), Received(id, SendInput(input))) =>
                         val newPlayers = players.updatedWith(id) {
-                            case Some(igp) =>
+                            case Some(in_game_player) =>
                                 val updatedInput = input match {
-                                    case PressLeft    => igp.lastInput.copy(moveLeft  = true)
-                                    case ReleaseLeft  => igp.lastInput.copy(moveLeft  = false)
-                                    case PressRight   => igp.lastInput.copy(moveRight = true)
-                                    case ReleaseRight => igp.lastInput.copy(moveRight = false)
-                                    case PressJump    => igp.lastInput.copy(jump      = true)
-                                    case ReleaseJump  => igp.lastInput.copy(jump      = false)
+                                    case PressLeft => in_game_player.lastInput.copy(moveLeft = true)
+                                    case ReleaseLeft => in_game_player.lastInput.copy(moveLeft = false)
+                                    case PressRight => in_game_player.lastInput.copy(moveRight = true)
+                                    case ReleaseRight => in_game_player.lastInput.copy(moveRight = false)
+                                    case PressJump => in_game_player.lastInput.copy(jump = true)
+                                    case ReleaseJump => in_game_player.lastInput.copy(jump = false)
                                 }
-                                Some(igp.copy(lastInput = updatedInput))
+                                Some(in_game_player.copy(lastInput = updatedInput))
                             case None => None
                         }
                         stateMachine(events, senders, InGame(clients, newPlayers, map, lastTick), tickerFiber)
@@ -163,18 +163,18 @@ object Main extends IOApp.Simple {
                         val now = System.currentTimeMillis(); 
                         val dt = ((now - lastTick) / 1000f).min(0.1f)
 
-                        val updatedPlayers = players.map { case (id, igp) => id -> igp.copy(player = igp.player.update(igp.lastInput, dt, map)) }
+                        val updated_players = players.map { case (id, in_game_player) => id -> in_game_player.copy(player = in_game_player.player.update(in_game_player.lastInput, dt, map)) }
 
-                        val snaps = updatedPlayers.values.map(p => PlayerMemento(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)).toList
+                        val memento = updated_players.values.map(in_game_player => PlayerMemento(in_game_player.id, in_game_player.player.coords.x, in_game_player.player.coords.y, in_game_player.player.is_alive, in_game_player.player.stats.size.x, in_game_player.player.stats.size.y, in_game_player.player.current_time, in_game_player.player.max_time)).toList
+                        
+                        val all_dead = updated_players.values.forall(!_.player.is_alive)
 
-                        val allDead = updatedPlayers.values.forall(!_.player.is_alive)
-
-                        NetworkState.broadcast(clients, senders, GameTick(snaps)) >>
+                        NetworkState.broadcast(clients, senders, GameTick(memento)) >>
                         (
-                            if (allDead)
+                            if (all_dead)
                                 tickerFiber.fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
                             else
-                                stateMachine(events, senders, InGame(clients, updatedPlayers, map, now), tickerFiber)
+                                stateMachine(events, senders, InGame(clients, updated_players, map, now), tickerFiber)
                         )
 
                     case (InGame(clients, players, map, _), Disconnected(id)) =>
@@ -197,7 +197,7 @@ object Main extends IOApp.Simple {
             val players = clients.values.zipWithIndex.map { 
                 case (client, index) =>
                     val stats = Constants.CHARACTERS(client.character.get)
-                    val player = Player(Vector2(index * 40f, 0f), Vector2(0f, 0f), 300f, 300f, stats, false, true)
+                    val player = Player(Vector2(index * 40f, 0f), Vector2(0f, 0f), 30f, 30f, stats, false, true)
                     client.id -> InGamePlayer(client.id, player)
             }.toMap
 

@@ -22,4 +22,4 @@ case class GameTick(players: List[PlayerMemento]) extends ServerMsg
 case class GameEnded() extends ServerMsg
 
 case class LobbyPlayer(id: String, name: String, char: Option[String], ready: Boolean) derives ReadWriter
-case class PlayerMemento(id: String, x: Float, y: Float, alive: Boolean, sizeX: Float, sizeY: Float) derives ReadWriter
+case class PlayerMemento(id: String, x: Float, y: Float, alive: Boolean, sizeX: Float, sizeY: Float, current_time: Float, max_time: Float) derives ReadWriter

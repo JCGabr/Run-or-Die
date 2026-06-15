@@ -1,3 +1,4 @@
+// client/src/main/scala/Drawer.scala
 import org.scalajs.dom
 import org.scalajs.dom.html
 import org.scalajs.dom.document
@@ -32,7 +33,7 @@ object Drawer:
         cloud: Cloud,
         cameraX: Float,
         cameraY: Float
-    ): Unit =
+    ): Unit = {
         val x = cloud.x - cameraX * 0.2f
         val y = cloud.y - cameraY * 0.05f
 
@@ -108,6 +109,71 @@ object Drawer:
             Math.PI * 2
         )
         ctx.fill()
+    }
+
+
+    def drawHud(me: Option[PlayerMemento]): Unit =
+        me.foreach { p =>
+            val current_seconds = p.current_time.toInt
+            val max_seconds = p.max_time.toInt
+
+            val current_label = f"${current_seconds / 60}%02d:${current_seconds % 60}%02d"
+            val max_label = f"${max_seconds / 60}%02d:${max_seconds % 60}%02d"
+
+            val box_width = 120
+            val box_height = 48
+            val box_x = (canvas.width - box_width) / 2
+            val boxY = 12
+
+            ctx.fillStyle = "rgba(0,0,0,0.55)"
+            ctx.beginPath()
+            ctx.rect(box_x, boxY, box_width, box_height)
+            ctx.fill()
+
+            ctx.strokeStyle =
+                if (p.current_time <= p.max_time * 0.25f) 
+                    "rgba(255,80,80,0.9)"
+                else 
+                    "rgba(255,255,255,0.25)"
+            ctx.lineWidth = 1.5
+            ctx.stroke()
+
+            ctx.fillStyle =
+                if (p.current_time <= p.max_time * 0.25f) 
+                    "#ff5050"
+                else 
+                    "#ffffff"
+    
+            ctx.font = "bold 26px monospace"
+            ctx.textAlign = "center"
+            ctx.textBaseline = "middle"
+            ctx.fillText(current_label, box_x + box_width / 2, boxY + box_height / 2)
+
+            val small_box_width = 72
+            val small_box_height = 28
+            val small_box_x = 12
+            val small_box_y = 12
+
+            ctx.fillStyle = "rgba(0,0,0,0.45)"
+            ctx.beginPath()
+            ctx.rect(small_box_x, small_box_y, small_box_width, small_box_height)
+            ctx.fill()
+
+            ctx.strokeStyle = "rgba(255,255,255,0.2)"
+            ctx.lineWidth = 1.0
+            ctx.stroke()
+
+            ctx.fillStyle = "rgba(200,200,200,0.75)"
+            ctx.font = "11px monospace"
+            ctx.textAlign = "left"
+            ctx.textBaseline = "top"
+            ctx.fillText("MAX", small_box_x + 8, small_box_y + 5)
+
+            ctx.fillStyle = "#ffffff"
+            ctx.font = "bold 13px monospace"
+            ctx.textBaseline = "bottom"
+            ctx.fillText(max_label, small_box_x + 8, small_box_y + small_box_height - 4)
+        }
 
     def render(map: Vector[Vector[String]], players: List[PlayerMemento], myId: String, delta_time: Double): Unit = {
         canvas.width = canvas.clientWidth
@@ -160,10 +226,10 @@ object Drawer:
             worldHeight - drawCameraY
         )
 
-        gradient.addColorStop(0.0, "#87CEEB")  // celeste
-        gradient.addColorStop(0.4, "#FFB6C1")  // rosa suave
-        gradient.addColorStop(0.7, "#9370DB")  // violeta
-        gradient.addColorStop(1.0, "#0A0A28")  // noche
+        gradient.addColorStop(0.0, "#87CEEB")
+        gradient.addColorStop(0.4, "#FFB6C1")
+        gradient.addColorStop(0.7, "#9370DB")
+        gradient.addColorStop(1.0, "#0A0A28")
 
         ctx.fillStyle = gradient
         ctx.fillRect(
@@ -210,4 +276,5 @@ object Drawer:
         }
         
         ctx.restore()
+        drawHud(me)
     }
