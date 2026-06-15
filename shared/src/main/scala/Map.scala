@@ -203,7 +203,9 @@ class MapGame
                         else {
                             if (y == 0 && x == 0)
                                 root
-                            else if (y == 0) {
+                            else if (y == max_y) {
+                                Constants.FAMILIES("death_floor").children("death_floor")
+                            } else if (y == 0) {
                                 val left = currentRows(y)(x - 1)
                                 val leftFamily = getFamily(left)
                                 val nextFamily = weightedRandom(adjustWeightByY(leftFamily.right_weights,y))
