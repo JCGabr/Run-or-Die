@@ -165,16 +165,44 @@ object Main extends IOApp.Simple {
 
                         val updated_players = players.map { case (id, in_game_player) => id -> in_game_player.copy(player = in_game_player.player.update(in_game_player.lastInput, dt, map)) }
 
-                        val memento = updated_players.values.map(in_game_player => PlayerMemento(in_game_player.id, in_game_player.player.coords.x, in_game_player.player.coords.y, in_game_player.player.is_alive, in_game_player.player.stats.size.x, in_game_player.player.stats.size.y, in_game_player.player.current_time, in_game_player.player.max_time)).toList
+                        val claimed_players = updated_players.filter(_._2.player.claimed_checkpoint).keySet
+
+                        val penalized_players = 
+                            if (claimed_players.isEmpty)
+                                updated_players
+                            else(
+                                updated_players.map{
+                                    case(id, in_game_player) =>
+                                        if(!claimed_players(id) && in_game_player.player.is_alive){
+                                            val should_penalize = claimed_players.exists { 
+                                                claimer_id =>
+                                                    val claimer = updated_players(claimer_id).player
+                                                    in_game_player.player.coords.x < claimer.last_checkpoint.x + Constants.BLOCK_SIZE
+                                            }
+                                            if (should_penalize){
+                                                val new_max = (in_game_player.player.max_time - 1.0f).max(0f)
+                                                val new_current = (in_game_player.player.current_time - 1.0f).max(0f)
+                                                id -> in_game_player.copy(player = in_game_player.player.copy(max_time = new_max, current_time = new_current))
+                                            }else{
+                                                id -> in_game_player.copy(player = in_game_player.player.copy(claimed_checkpoint = false))
+                                            }
+                                            
+                                        }else{
+                                            id -> in_game_player.copy(player = in_game_player.player.copy(claimed_checkpoint = false))
+                                        }
+                                }
+                            )
+
+                        val memento = penalized_players.values.map(in_game_player => PlayerMemento(in_game_player.id, in_game_player.player.coords.x, in_game_player.player.coords.y, in_game_player.player.is_alive, in_game_player.player.stats.size.x, in_game_player.player.stats.size.y, in_game_player.player.current_time, in_game_player.player.max_time)).toList
                         
-                        val all_dead = updated_players.values.forall(!_.player.is_alive)
+                        val all_dead = penalized_players.values.forall(!_.player.is_alive)
 
                         NetworkState.broadcast(clients, senders, GameTick(memento)) >>
                         (
                             if (all_dead)
                                 tickerFiber.fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
                             else
-                                stateMachine(events, senders, InGame(clients, updated_players, map, now), tickerFiber)
+                                stateMachine(events, senders, InGame(clients, penalized_players, map, now), tickerFiber)
                         )
 
                     case (InGame(clients, players, map, _), Disconnected(id)) =>

@@ -17,7 +17,9 @@ case class Player
     is_grounded: Boolean,
     is_alive: Boolean,
 
-    last_checkpoint : Vector2 = Vector2(0,0)
+    last_checkpoint : Vector2 = Vector2(0,0),
+
+    claimed_checkpoint: Boolean = false
 )
 {
     def update(input: InputState, dt: Float, map: Vector[Vector[String]]): Player = {
@@ -154,7 +156,7 @@ case class Player
                     resolved.copy(coords = last_checkpoint, velocity = Vector2(0f, 0f), current_time = (current_time - 1))
             case Some("C") => 
                 if(final_x > last_checkpoint.x + cell_size * 3)
-                    resolved.copy(last_checkpoint = Vector2(final_x, final_y), current_time = max_time) // TO DO: disminuir tiempo de los demas jugadores
+                    resolved.copy(last_checkpoint = Vector2(final_x, final_y), current_time = max_time, claimed_checkpoint = true)
                 else
                     resolved
             case _ => resolved
