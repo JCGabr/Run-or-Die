@@ -326,6 +326,24 @@ object Constants{
                 "platform_cube_top_left"  -> 0.20f,
                 "platform_diag1"          -> 0.15f
             )
+        ),
+        "death_floor" -> SegmentFamily(
+            id = "death_floor",
+            children = Map(
+                "death_floor" -> Segment(
+                    pattern = Vector(
+                        Vector(".", "."),
+                        Vector("S", "S")
+                    )
+                )
+            ),
+            right_weights = Map(
+                "death_floor" -> 1.00f
+            ),
+            bottom_weights = Map(
+                "platform_bottom" -> 0.50f,
+                "platform_top" ->0.50f
+            )
         )
     )
 
