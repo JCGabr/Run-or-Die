@@ -13,7 +13,7 @@ import java.util.UUID
 import scala.concurrent.duration.*
 
 case class Client(id: String, name: String, character: Option[String], ready: Boolean)
-case class InGamePlayer(id: String, player: Player)
+case class InGamePlayer(id: String, player: Player, lastInput: InputState = InputState.empty)
 
 sealed trait Phase
 case class Lobby(clients: Map[String, Client]) extends Phase
@@ -25,23 +25,31 @@ case class Disconnected(id: String) extends Event
 case class Received (id: String, msg: ClientMsg) extends Event
 case object Tick extends Event
 
-object AppState {
+object NetworkState {
     def broadcast(clients: Map[String, Client], senders: Map[String, String => IO[Unit]], msg: ServerMsg): IO[Unit] ={
-        return clients.keys.toList.traverse_ { 
+        clients.keys.toList.parTraverse_ {
             id =>
-                senders.get(id).fold(IO.unit)(_(write[ServerMsg](msg)))
+                senders.get(id) match {
+                    case None => IO.unit
+                    case Some(send) => send(write[ServerMsg](msg))
+                }
         }
     }
 
     def lobbyMsg(clients: Map[String, Client]): LobbyUpdate ={
-        return LobbyUpdate(clients.values.map(c => LobbyPlayer(c.id, c.name, c.character, c.ready)).toList)
+        return LobbyUpdate(
+            clients.values.map(
+                client => 
+                    LobbyPlayer(client.id, client.name, client.character, client.ready)
+                ).toList
+            )
     }
 
     def expand(mat: Vector[Vector[Segment]]): Vector[Vector[String]] ={
         return mat.flatMap { 
             row =>
-                val pats = row.map(_.pattern)
-                (0 until 2).map(py => pats.flatMap(_(py)))
+                val patterns = row.map(_.pattern)
+                (0 until 2).map(y => patterns.flatMap(_(y)))
         }
     }
 }
@@ -80,11 +88,11 @@ object Main extends IOApp.Simple {
                     val fromClient: Pipe[IO, WebSocketFrame, Unit] =
                     _.evalMap {
                         case WebSocketFrame.Text(text, _) =>
-                        events.offer(Received(id, read[ClientMsg](text)))
+                            events.offer(Received(id, read[ClientMsg](text)))
                         case WebSocketFrame.Close(_) =>
-                        events.offer(Disconnected(id))
+                            events.offer(Disconnected(id))
                         case _ =>
-                        IO.unit
+                            IO.unit
                     }
 
                     wsb.build(toClient, fromClient)
@@ -98,73 +106,73 @@ object Main extends IOApp.Simple {
                 (phase, event) match {
 
                     case (Lobby(clients), Connected(id, send)) =>
-                        val newClients = clients + (id -> Client(id, "?", None, ready = false))
-                        val newSenders = senders + (id -> send)
+                        val new_clients = clients + (id -> Client(id, "?", None, ready = false))
+                        val new_senders = senders + (id -> send)
                         
-                        AppState.broadcast(newClients, newSenders, AppState.lobbyMsg(newClients)) >>
-                        stateMachine(events, newSenders, Lobby(newClients), tickerFiber)
+                        NetworkState.broadcast(new_clients, new_senders, NetworkState.lobbyMsg(new_clients)) >>
+                        stateMachine(events, new_senders, Lobby(new_clients), tickerFiber)
 
                     case (Lobby(clients), Disconnected(id)) =>
-                        val newClients = clients - id
-                        val newSenders = senders - id
+                        val new_clients = clients - id
+                        val new_senders = senders - id
                         
-                        AppState.broadcast(newClients, newSenders, AppState.lobbyMsg(newClients)) >>
-                        stateMachine(events, newSenders, Lobby(newClients), tickerFiber)
+                        NetworkState.broadcast(new_clients, new_senders, NetworkState.lobbyMsg(new_clients)) >>
+                        stateMachine(events, new_senders, Lobby(new_clients), tickerFiber)
 
                     case (Lobby(clients), Received(id, JoinLobby(name))) =>
-                        val newClients = clients.updated(id, clients(id).copy(name = name))
+                        val new_clients = clients.updated(id, clients(id).copy(name = name))
                         
-                        AppState.broadcast(newClients, senders, AppState.lobbyMsg(newClients)) >>
-                        stateMachine(events, senders, Lobby(newClients), tickerFiber)
+                        NetworkState.broadcast(new_clients, senders, NetworkState.lobbyMsg(new_clients)) >>
+                        stateMachine(events, senders, Lobby(new_clients), tickerFiber)
 
                     case (Lobby(clients), Received(id, SelectCharacter(character))) =>
-                        val newClients = clients.updated(id, clients(id).copy(character = Some(character)))
+                        val new_clients = clients.updated(id, clients(id).copy(character = Some(character)))
                         
-                        AppState.broadcast(newClients, senders, AppState.lobbyMsg(newClients)) >>
-                        stateMachine(events, senders, Lobby(newClients), tickerFiber)
+                        NetworkState.broadcast(new_clients, senders, NetworkState.lobbyMsg(new_clients)) >>
+                        stateMachine(events, senders, Lobby(new_clients), tickerFiber)
 
                     case (Lobby(clients), Received(id, SetReady(ready))) =>
-                        val newClients = clients.updated(id, clients(id).copy(ready = ready))
-                        val allReady= newClients.nonEmpty && newClients.values.forall(c => c.ready && c.character.isDefined)
+                        val new_clients = clients.updated(id, clients(id).copy(ready = ready))
+                        val allReady= new_clients.nonEmpty && new_clients.values.forall(client => client.ready && client.character.isDefined)
                         
-                        AppState.broadcast(newClients, senders, AppState.lobbyMsg(newClients)) >>
+                        NetworkState.broadcast(new_clients, senders, NetworkState.lobbyMsg(new_clients)) >>
                         (
                             if (allReady) 
-                            startGame(events, senders, newClients)
+                                startGame(events, senders, new_clients)
                             else
-                            stateMachine(events, senders, Lobby(newClients), tickerFiber)
+                                stateMachine(events, senders, Lobby(new_clients), tickerFiber)
                         )
 
                     case (InGame(clients, players, map, lastTick), Received(id, SendInput(input))) =>
-                        val now = System.currentTimeMillis()
-                        val dt = ((now - lastTick) / 1000f).min(0.1f)
-                        val newPlayers = players.get(id).fold(players) { 
-                            igp =>
-                                val updated = igp.player.update(input, dt, map)
-                                players.updated(id, igp.copy(player = updated))
-                        }
-                        stateMachine(events, senders, InGame(clients, newPlayers, map, now), tickerFiber)
+                        val new_players = players.updatedWith(id)(_.map(_.copy(lastInput = input)))
+                        stateMachine(events, senders, InGame(clients, new_players, map, lastTick), tickerFiber)
 
                     case (InGame(clients, players, map, lastTick), Tick) =>
-                        val snaps = players.values.map(
-                            p =>
-                                PlayerSnap(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)
-                        ).toList
-                        val allDead = players.values.forall(!_.player.is_alive)
+                        val now = System.currentTimeMillis()
+                        val dt = ((now - lastTick) / 1000f).min(0.1f)
 
-                        AppState.broadcast(clients, senders, GameTick(snaps)) >>
+                        val new_players = players.map { case (id, in_game_player) =>
+                            id -> in_game_player.copy(player = in_game_player.player.update(in_game_player.lastInput, dt, map))
+                        }
+                        val snaps = new_players.values.map(
+                            player =>
+                                PlayerSnap(player.id, player.player.coords.x, player.player.coords.y, player.player.is_alive, player.player.stats.size.x, player.player.stats.size.y)
+                        ).toList
+                        val allDead = new_players.values.forall(!_.player.is_alive)
+
+                        NetworkState.broadcast(clients, senders, GameTick(snaps)) >>
                         (
                             if (allDead)
                                 tickerFiber.fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
                             else
-                                stateMachine(events, senders, InGame(clients, players, map, lastTick), tickerFiber)
+                                stateMachine(events, senders, InGame(clients, new_players, map, now), tickerFiber)
                         )
 
                     case (InGame(clients, players, map, _), Disconnected(id)) =>
-                        val newClients = clients - id
-                        val newPlayers = players - id
-                        val newSenders = senders - id
-                        stateMachine(events, newSenders, InGame(newClients, newPlayers, map), tickerFiber)
+                        val new_clients = clients - id
+                        val new_players = players - id
+                        val new_senders = senders - id
+                        stateMachine(events, new_senders, InGame(new_clients, new_players, map), tickerFiber)
 
                     case _ =>
                         stateMachine(events, senders, phase, tickerFiber)
@@ -172,26 +180,25 @@ object Main extends IOApp.Simple {
         }
     }
 
-
     def startGame(events:  Queue[IO, Event], senders: Map[String, String => IO[Unit]], clients: Map[String, Client]): IO[Unit] =
         IO {
             val rawMap = new MapGame(500, 0, 30, 0).generate()
-            val map = AppState.expand(rawMap)
+            val map = NetworkState.expand(rawMap)
 
             val players = clients.values.zipWithIndex.map { 
-                case (c, i) =>
-                    val stats = Constants.CHARACTERS(c.character.get)
-                    val p = Player(Vector2(i * 40f, 0f), Vector2(0f, 0f), 300f, 300f, stats, false, true)
-                    c.id -> InGamePlayer(c.id, p)
+                case (client, index) =>
+                    val stats = Constants.CHARACTERS(client.character.get)
+                    val player = Player(Vector2(index * 40f, 0f), Vector2(0f, 0f), 300f, 300f, stats, false, true)
+                    client.id -> InGamePlayer(client.id, player)
             }.toMap
 
             (map, players)
         }.flatMap { 
             case (map, players) =>
                 clients.values.toList.traverse_ { 
-                    c =>
-                        val pos = players(c.id).player.coords
-                        senders.get(c.id).fold(IO.unit)(_(write[ServerMsg](GameStarted(map, c.id))))
+                    client =>
+                        val pos = players(client.id).player.coords
+                        senders.get(client.id).fold(IO.unit)(_(write[ServerMsg](GameStarted(map, client.id))))
                 } >>
                 ticker(events).flatMap { fiber =>
                     stateMachine(events, senders, InGame(clients, players, map), Some(fiber))
@@ -207,12 +214,12 @@ object Main extends IOApp.Simple {
 
     def endGame(events: Queue[IO, Event], senders: Map[String, String => IO[Unit]], clients: Map[String, Client]): IO[Unit] ={
         val resetClients = clients.map { 
-            case (id, c) => 
-                id -> c.copy(ready = false, character = None) 
+            case (id, client) => 
+                id -> client.copy(ready = false, character = None) 
             }
         
-        AppState.broadcast(resetClients, senders, GameEnded()) >>
-        AppState.broadcast(resetClients, senders, AppState.lobbyMsg(resetClients)) >>
+        NetworkState.broadcast(resetClients, senders, GameEnded()) >>
+        NetworkState.broadcast(resetClients, senders, NetworkState.lobbyMsg(resetClients)) >>
         stateMachine(events, senders, Lobby(resetClients), None)
     }
 }
