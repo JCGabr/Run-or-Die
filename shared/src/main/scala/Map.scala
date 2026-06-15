@@ -107,11 +107,17 @@ class MapGame
 
     def isCheckpoint(segment: Segment): Boolean = {
         val name = segmentName(segment)
-        name == "platform_bottom_checkpoint"  ||
+        name.endsWith("_checkpoint")
+        /*name == "platform_bottom_checkpoint"  ||
         name == "platform_diag1_checkpoint"   ||
         name == "platform_diag2_checkpoint"   ||
         name == "platform_cube_bottom_right_checkpoint" ||
-        name == "platform_cube_bottom_left_checkpoint"
+        name == "platform_cube_bottom_left_checkpoint"*/
+    }
+
+    def isSpike(segment: Segment): Boolean = {
+        val name = segmentName(segment)
+        name.endsWith("_spike")
     }
 
     def isEmpty(segment: Segment): Boolean =
@@ -122,6 +128,7 @@ class MapGame
         up: Segment, 
         checkpointCooldown: Int, 
         checkpointPlaced: Boolean,
+        spikeMultiplier: Float
     ): Segment = {
         val candidates =
             Constants.FAMILIES(familyId)
@@ -138,10 +145,23 @@ class MapGame
                 }
                 .toVector
 
-        if (candidates.nonEmpty)
-            candidates(Random.nextInt(candidates.size))
-        else
+        if (candidates.nonEmpty) {
+            val weightedCandidates =
+                candidates.map { candidate =>
+                    val weight =
+                        if (isSpike(candidate))
+                            spikeMultiplier
+                        else
+                            1.0f
+
+                    candidate -> weight
+                }.toMap
+
+            weightedRandom(weightedCandidates)
+
+        } else {
             Constants.FAMILIES("empty").children("empty_default")
+        }
     }
 
 
@@ -157,6 +177,12 @@ class MapGame
             )
         val finalState =
             (0 to max_x).foldLeft(initialState) { (state, x) =>
+                val progress = x.toFloat / max_x
+                val spikeMultiplier =
+                    if (progress < 0.2f)
+                        0.0f
+                    else
+                        0.2f + ((progress - 0.2f) / 0.8f) * 1.8f
 
                 val columnState =
                     (0 to max_y).foldLeft(
@@ -181,12 +207,12 @@ class MapGame
                                 val left = currentRows(y)(x - 1)
                                 val leftFamily = getFamily(left)
                                 val nextFamily = weightedRandom(adjustWeightByY(leftFamily.right_weights,y))
-                                selectValidSegment(nextFamily, left, state.checkpointCooldown, columnState.checkpointPlaced)
+                                selectValidSegment(nextFamily, left, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
                             } else if (x == 0) {
                                 val up = currentRows(y - 1)(0)
                                 val upFamily = getFamily(up)
                                 val nextFamily = weightedRandom(adjustWeightByY(upFamily.bottom_weights,y))
-                                selectValidSegment(nextFamily, up, state.checkpointCooldown, columnState.checkpointPlaced)
+                                selectValidSegment(nextFamily, up, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
                             } else {
                                 val left  = currentRows(y)(x - 1)
                                 val up = currentRows(y - 1)(x)
@@ -203,7 +229,7 @@ class MapGame
                                     up
                                 else 
                                     val nextFamily = weightedRandom(adjustWeightByY(new_weights, y))
-                                    selectValidSegment(nextFamily, up, state.checkpointCooldown, columnState.checkpointPlaced)
+                                    selectValidSegment(nextFamily, up, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
                             }
                         }
 
