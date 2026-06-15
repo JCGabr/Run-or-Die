@@ -1,12 +1,114 @@
 import org.scalajs.dom
 import org.scalajs.dom.html
 import org.scalajs.dom.document
+import scala.util.Random
 
 object Drawer:
+    case class Cloud(
+        x: Float,
+        y: Float,
+        size: Float
+    )
 
     val canvas = document.getElementById("window-game").asInstanceOf[html.Canvas]
     val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]        
     val bg = document.getElementById("bg").asInstanceOf[html.Image]
+
+    def generateClouds(
+        worldWidth: Int,
+        worldHeight: Int
+    ): List[Cloud] =
+        val random = Random(42)
+
+        (0 until 120).map { _ =>
+            Cloud(
+                random.between(0f, worldWidth.toFloat),
+                random.between(0f, worldHeight.toFloat * 0.15f),
+                random.between(20f, 60f)
+            )
+        }.toList
+
+    def drawCloud(
+        cloud: Cloud,
+        cameraX: Float,
+        cameraY: Float
+    ): Unit =
+        val x = cloud.x - cameraX * 0.2f
+        val y = cloud.y - cameraY * 0.05f
+
+        ctx.fillStyle = "rgba(255,255,255,0.3)"
+        ctx.beginPath()
+        // Inferior izquierda
+        ctx.moveTo(
+            x + cloud.size * 0.45f,
+            y
+        )
+
+        ctx.arc(
+            x,
+            y,
+            cloud.size * 0.45f,
+            0,
+            Math.PI * 2
+        )
+
+        // Inferior centro
+        ctx.moveTo(
+            x + cloud.size,
+            y
+        )
+
+        ctx.arc(
+            x + cloud.size * 0.45f,
+            y,
+            cloud.size * 0.55f,
+            0,
+            Math.PI * 2
+        )
+
+        // Inferior derecha
+        ctx.moveTo(
+            x + cloud.size * 1.35f,
+            y
+        )
+
+        ctx.arc(
+            x + cloud.size * 0.9f,
+            y,
+            cloud.size * 0.45f,
+            0,
+            Math.PI * 2
+        )
+
+        // Superior izquierda
+        ctx.moveTo(
+            x + cloud.size * 0.65f,
+            y - cloud.size * 0.3f
+        )
+
+        ctx.arc(
+            x + cloud.size * 0.25f,
+            y - cloud.size * 0.3f,
+            cloud.size * 0.4f,
+            0,
+            Math.PI * 2
+        )
+
+        // Superior derecha
+        ctx.moveTo(
+            x + cloud.size * 1.1f,
+            y - cloud.size * 0.35f
+        )
+
+        ctx.arc(
+            x + cloud.size * 0.65f,
+            y - cloud.size * 0.35f,
+            cloud.size * 0.45f,
+            0,
+            Math.PI * 2
+        )
+        ctx.fill()
+
     def render(map: Vector[Vector[String]], players: List[PlayerSnap], myId: String, delta_time: Double): Unit = {
         canvas.width = canvas.clientWidth
         canvas.height = canvas.clientHeight
@@ -26,6 +128,8 @@ object Drawer:
         val viewWidth = canvas.width / scale
 
         val viewHeight = canvas.height / scale
+
+        val clouds = generateClouds(worldWidth, worldHeight)
 
         val rawCameraX =
             me.map(_.x - (viewWidth / 2).toFloat)
@@ -68,6 +172,15 @@ object Drawer:
             worldWidth,
             worldHeight
         )
+
+        clouds.foreach { cloud =>
+            drawCloud(
+                cloud,
+                drawCameraX,
+                drawCameraY
+            )
+        }
+
         map.zipWithIndex.foreach { case (row, ry) =>
             row.zipWithIndex.foreach { case (cell, cx) =>
                 ctx.fillStyle = cell match {
