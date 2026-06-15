@@ -4,7 +4,16 @@ sealed trait ClientMsg derives ReadWriter
 case class JoinLobby(name: String) extends ClientMsg
 case class SelectCharacter(char: String) extends ClientMsg
 case class SetReady(ready: Boolean) extends ClientMsg
-case class SendInput(input: InputState) extends ClientMsg
+case class SendInput(input: InputMsg) extends ClientMsg
+
+sealed trait InputMsg derives ReadWriter
+
+case object PressLeft extends InputMsg
+case object ReleaseLeft extends InputMsg
+case object PressRight extends InputMsg
+case object ReleaseRight extends InputMsg
+case object PressJump extends InputMsg
+case object ReleaseJump extends InputMsg
 
 sealed trait ServerMsg derives ReadWriter
 case class LobbyUpdate(players: List[LobbyPlayer]) extends ServerMsg

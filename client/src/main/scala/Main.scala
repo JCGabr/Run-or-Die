@@ -14,10 +14,16 @@ object Main {
         val ip = dom.window.prompt("Ip a conectar: ").nn
         val lobby = new dom.WebSocket("ws://"+ ip +":9000/lobby")
 
-        lobby.onopen = _ => lobby.send(write[ClientMsg](JoinLobby(name)))
+        lobby.onopen = _ => {
+            lobby.send(write[ClientMsg](JoinLobby(name)))
+            InputHandler.init { msg =>
+                lobby.send(write[ClientMsg](msg))
+            }
+        }
         lobby.onmessage = e => dispatch(lobby, read[ServerMsg](e.data.toString), InLobby, List.empty)
 
-        InputHandler.init()
+        
+
         loop(lobby, InLobby, List.empty, 0, 0)
     }
 
@@ -26,7 +32,6 @@ object Main {
             case InGame(map, myId) =>
                 val dt = (current - last) / 1000.0
                 Drawer.render(map, players, myId, dt)
-                lobby.send(write[ClientMsg](SendInput(InputHandler.getInput())))
             case InLobby => ()
         }
         dom.window.requestAnimationFrame { t =>

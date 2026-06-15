@@ -2,25 +2,21 @@ import org.scalajs.dom
 
 object InputHandler:
 
-    var input: InputState = InputState()
-
-    def init(): Unit =
+    def init(send: ClientMsg => Unit): Unit =
         dom.document.onkeydown = e => {
             e.key match {
-                case "a" => input = input.copy(moveLeft  = true)
-                case "d" => input = input.copy(moveRight = true)
-                case "w" => input = input.copy(jump      = true)
+                case "a" => send(SendInput(PressLeft))
+                case "d" => send(SendInput(PressRight))
+                case "w" => send(SendInput(PressJump))
                 case _ =>
             }
         }
 
         dom.document.onkeyup = e => {
             e.key match {
-                case "a" => input = input.copy(moveLeft  = false)
-                case "d" => input = input.copy(moveRight = false)
-                case "w" => input = input.copy(jump      = false)
+                case "a" => send(SendInput(ReleaseLeft))
+                case "d" => send(SendInput(ReleaseRight))
+                case "w" => send(SendInput(ReleaseJump))
                 case _ =>
             }
         }
-
-    def getInput(): InputState = input
