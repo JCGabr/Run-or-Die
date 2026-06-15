@@ -77,23 +77,60 @@ object Main {
     }
 
     def renderLobby(ws: dom.WebSocket, ps: List[LobbyPlayer]): Unit = {
-        Option(document.getElementById("player-list")).foreach { el =>
-            el.innerHTML = ps.map(p =>
-                s"<div>${p.name} | ${p.char.getOrElse("-")} | ${if (p.ready) "Ready" else "Pendiente"}</div>"
-            ).mkString
+
+        Option(document.getElementById("player-list")).foreach { element =>
+            element.innerHTML = ""
+            ps.foreach { player =>
+                val card = document.createElement("div").asInstanceOf[html.Element]
+                card.className = "player-card" + (if (player.ready) " ready" else "")
+
+                val charArea = document.createElement("div").asInstanceOf[html.Element]
+                charArea.className = "char-area"
+
+                player.char match {
+                    case Some(client) =>
+                        val img = document.createElement("img").asInstanceOf[html.Image]
+                        img.src = s"$client.png"
+                        img.alt = client
+                        charArea.appendChild(img)
+                    case None =>
+                        val placeholder = document.createElement("span").asInstanceOf[html.Element]
+                        placeholder.className = "no-char"
+                        placeholder.textContent = "?"
+                        charArea.appendChild(placeholder)
+                }
+
+                val info = document.createElement("div").asInstanceOf[html.Element]
+                info.className = "player-info"
+
+                val nameEl = document.createElement("span").asInstanceOf[html.Element]
+                nameEl.className = "player-name"
+                nameEl.textContent = player.name
+
+                val charEl = document.createElement("span").asInstanceOf[html.Element]
+                charEl.className = "player-char"
+                charEl.textContent = player.char.getOrElse("—")
+
+                val statusEl = document.createElement("span").asInstanceOf[html.Element]
+                statusEl.className = "player-status"
+                statusEl.textContent = if (player.ready) "Listo" else "Pendiente"
+
+                info.appendChild(nameEl)
+                info.appendChild(charEl)
+                info.appendChild(statusEl)
+                card.appendChild(charArea)
+                card.appendChild(info)
+                element.appendChild(card)
+            }
         }
 
         Option(document.getElementById("char-buttons")).foreach { container =>
-            if (container.innerHTML.trim.isEmpty) {
-                container.innerHTML = Constants.CHARACTERS.keys.map(c =>
-                    s"""<button id="char-$c">$c</button>"""
-                ).mkString
-                Constants.CHARACTERS.keys.foreach { c =>
-                    Option(document.getElementById(s"char-$c")).foreach {
-                        _.asInstanceOf[html.Button].onclick = _ =>
-                            ws.send(write[ClientMsg](SelectCharacter(c)))
-                    }
-                }
+            container.innerHTML = ""
+            Constants.CHARACTERS.keys.foreach { client =>
+                val btn = document.createElement("button").asInstanceOf[html.Button]
+                btn.textContent = client
+                btn.onclick = _ => ws.send(write[ClientMsg](SelectCharacter(client)))
+                container.appendChild(btn)
             }
         }
 
@@ -102,7 +139,6 @@ object Main {
                 ws.send(write[ClientMsg](SetReady(true)))
         }
     }
-
 
     def hideLogin(): Unit =
         Option(document.getElementById("login-overlay"))
