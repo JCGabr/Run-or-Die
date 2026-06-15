@@ -109,7 +109,7 @@ object Drawer:
         )
         ctx.fill()
 
-    def render(map: Vector[Vector[String]], players: List[PlayerSnap], myId: String, delta_time: Double): Unit = {
+    def render(map: Vector[Vector[String]], players: List[PlayerMemento], myId: String, delta_time: Double): Unit = {
         canvas.width = canvas.clientWidth
         canvas.height = canvas.clientHeight
 

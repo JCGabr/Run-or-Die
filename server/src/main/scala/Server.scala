@@ -144,28 +144,37 @@ object Main extends IOApp.Simple {
                         )
 
                     case (InGame(clients, players, map, lastTick), Received(id, SendInput(input))) =>
-                        val new_players = players.updatedWith(id)(_.map(_.copy(lastInput = input)))
-                        stateMachine(events, senders, InGame(clients, new_players, map, lastTick), tickerFiber)
+                        val newPlayers = players.updatedWith(id) {
+                            case Some(igp) =>
+                                val updatedInput = input match {
+                                    case PressLeft    => igp.lastInput.copy(moveLeft  = true)
+                                    case ReleaseLeft  => igp.lastInput.copy(moveLeft  = false)
+                                    case PressRight   => igp.lastInput.copy(moveRight = true)
+                                    case ReleaseRight => igp.lastInput.copy(moveRight = false)
+                                    case PressJump    => igp.lastInput.copy(jump      = true)
+                                    case ReleaseJump  => igp.lastInput.copy(jump      = false)
+                                }
+                                Some(igp.copy(lastInput = updatedInput))
+                            case None => None
+                        }
+                        stateMachine(events, senders, InGame(clients, newPlayers, map, lastTick), tickerFiber)
 
                     case (InGame(clients, players, map, lastTick), Tick) =>
-                        val now = System.currentTimeMillis()
+                        val now = System.currentTimeMillis(); 
                         val dt = ((now - lastTick) / 1000f).min(0.1f)
 
-                        val new_players = players.map { case (id, in_game_player) =>
-                            id -> in_game_player.copy(player = in_game_player.player.update(in_game_player.lastInput, dt, map))
-                        }
-                        val snaps = new_players.values.map(
-                            player =>
-                                PlayerSnap(player.id, player.player.coords.x, player.player.coords.y, player.player.is_alive, player.player.stats.size.x, player.player.stats.size.y)
-                        ).toList
-                        val allDead = new_players.values.forall(!_.player.is_alive)
+                        val updatedPlayers = players.map { case (id, igp) => id -> igp.copy(player = igp.player.update(igp.lastInput, dt, map)) }
+
+                        val snaps = updatedPlayers.values.map(p => PlayerMemento(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)).toList
+
+                        val allDead = updatedPlayers.values.forall(!_.player.is_alive)
 
                         NetworkState.broadcast(clients, senders, GameTick(snaps)) >>
                         (
                             if (allDead)
                                 tickerFiber.fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
                             else
-                                stateMachine(events, senders, InGame(clients, new_players, map, now), tickerFiber)
+                                stateMachine(events, senders, InGame(clients, updatedPlayers, map, now), tickerFiber)
                         )
 
                     case (InGame(clients, players, map, _), Disconnected(id)) =>
