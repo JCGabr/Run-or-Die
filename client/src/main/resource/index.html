@@ -4,9 +4,139 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #111;
+    }
+
+    #login-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 20;
+    }
+
+    #login-overlay h2 { font-size: 2rem; }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .form-group label { font-size: 0.85rem; color: #aaa; }
+
+    .form-group input {
+      padding: 10px 14px;
+      font-size: 1rem;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #222;
+      color: #fff;
+      outline: none;
+      width: 260px;
+    }
+
+    .form-group input:focus { border-color: #888; }
+
+    #login-error { color: #e55; font-size: 0.85rem; min-height: 1em; }
+
+    #lobby-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    #lobby-overlay h2 { font-size: 2rem; }
+
+    #player-list {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-height: 80px;
+    }
+
+    #char-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    #char-buttons button { padding: 8px 16px; cursor: pointer; }
+
+    #ready-btn {
+      margin-top: 8px;
+      padding: 12px 32px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    button {
+      border: 1px solid #555;
+      background: #222;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover { background: #333; }
+
+    #window-game {
+      border: 2px solid #444;
+      width: 90vw;
+      height: 90vh;
+      display: none;
+    }
+  </style>
 </head>
-<body style="margin: 0; min-height: 100vh; display: grid; place-items: center;">
-  <canvas id="window-game"  style="border: 2px solid black; width:90vw; height:90vh" ></canvas>
+<body>
+
+  <div id="login-overlay">
+    <h2>Unirse al juego</h2>
+    <div class="form-group">
+      <label for="input-name">Nombre</label>
+      <input id="input-name" type="text" placeholder="Tu nombre" autocomplete="off"/>
+    </div>
+    <div class="form-group">
+      <label for="input-ip">IP del servidor</label>
+      <input id="input-ip" type="text" placeholder="192.168.x.x" autocomplete="off"/>
+    </div>
+    <button id="join-btn">Conectar</button>
+    <p id="login-error"></p>
+  </div>
+
+  <div id="lobby-overlay" style="display:none">
+    <h2>Lobby</h2>
+    <div id="player-list"></div>
+    <hr style="width:60%; border-color:#444"/>
+    <div id="char-buttons"></div>
+    <button id="ready-btn">¡Listo!</button>
+  </div>
+
+  <canvas id="window-game"></canvas>
+
   <script src="../../../target/scala-3.8.3/client-fastopt/main.js"></script>
 </body>
 </html>
