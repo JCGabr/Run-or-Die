@@ -35,8 +35,6 @@ object Main {
             ws.send(write[ClientMsg](JoinLobby(name)))
         }
 
-        ws.onerror = _ => showLoginError("No se pudo conectar al servidor")
-
         ws.onmessage = e => dispatch(ws, read[ServerMsg](e.data.toString))
 
         loop(ws, 0, 0)
