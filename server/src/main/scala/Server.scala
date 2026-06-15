@@ -13,7 +13,7 @@ import java.util.UUID
 import scala.concurrent.duration.*
 
 case class Client(id: String, name: String, character: Option[String], ready: Boolean)
-case class InGamePlayer(id: String, player: Player)
+case class InGamePlayer(id: String, player: Player, lastInput: InputState = InputState.empty)
 
 sealed trait Phase
 case class Lobby(clients: Map[String, Client]) extends Phase
@@ -27,7 +27,7 @@ case object Tick extends Event
 
 object AppState {
     def broadcast(clients: Map[String, Client], senders: Map[String, String => IO[Unit]], msg: ServerMsg): IO[Unit] ={
-        return clients.keys.toList.traverse_ { 
+        clients.keys.toList.parTraverse_ {
             id =>
                 senders.get(id).fold(IO.unit)(_(write[ServerMsg](msg)))
         }
@@ -136,28 +136,28 @@ object Main extends IOApp.Simple {
                         )
 
                     case (InGame(clients, players, map, lastTick), Received(id, SendInput(input))) =>
-                        val now = System.currentTimeMillis()
-                        val dt = ((now - lastTick) / 1000f).min(0.1f)
-                        val newPlayers = players.get(id).fold(players) { 
-                            igp =>
-                                val updated = igp.player.update(input, dt, map)
-                                players.updated(id, igp.copy(player = updated))
-                        }
-                        stateMachine(events, senders, InGame(clients, newPlayers, map, now), tickerFiber)
+                        val newPlayers = players.updatedWith(id)(_.map(_.copy(lastInput = input)))
+                        stateMachine(events, senders, InGame(clients, newPlayers, map, lastTick), tickerFiber)
 
                     case (InGame(clients, players, map, lastTick), Tick) =>
-                        val snaps = players.values.map(
+                        val now = System.currentTimeMillis()
+                        val dt = ((now - lastTick) / 1000f).min(0.1f)
+
+                        val newPlayers = players.map { case (id, igp) =>
+                            id -> igp.copy(player = igp.player.update(igp.lastInput, dt, map))
+                        }
+                        val snaps = newPlayers.values.map(
                             p =>
                                 PlayerSnap(p.id, p.player.coords.x, p.player.coords.y, p.player.is_alive, p.player.stats.size.x, p.player.stats.size.y)
                         ).toList
-                        val allDead = players.values.forall(!_.player.is_alive)
+                        val allDead = newPlayers.values.forall(!_.player.is_alive)
 
                         AppState.broadcast(clients, senders, GameTick(snaps)) >>
                         (
                             if (allDead)
                                 tickerFiber.fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
                             else
-                                stateMachine(events, senders, InGame(clients, players, map, lastTick), tickerFiber)
+                                stateMachine(events, senders, InGame(clients, newPlayers, map, now), tickerFiber)
                         )
 
                     case (InGame(clients, players, map, _), Disconnected(id)) =>
@@ -171,7 +171,6 @@ object Main extends IOApp.Simple {
                     }
         }
     }
-
 
     def startGame(events:  Queue[IO, Event], senders: Map[String, String => IO[Unit]], clients: Map[String, Client]): IO[Unit] =
         IO {

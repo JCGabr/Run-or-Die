@@ -363,6 +363,9 @@ case class InputState(
     jump: Boolean = false
 ) derives ReadWriter
 
+object InputState:
+    val empty = InputState()
+
 case class PlayerStats(
     speed: Float,
     jumpForce: Float,
