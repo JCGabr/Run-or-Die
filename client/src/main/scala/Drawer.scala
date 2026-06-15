@@ -6,7 +6,7 @@ object Drawer:
 
     val canvas = document.getElementById("window-game").asInstanceOf[html.Canvas]
     val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]        
-
+    val bg = document.getElementById("bg").asInstanceOf[html.Image]
     def render(map: Vector[Vector[String]], players: List[PlayerSnap], myId: String, delta_time: Double): Unit = {
         canvas.width = canvas.clientWidth
         canvas.height = canvas.clientHeight
@@ -17,9 +17,7 @@ object Drawer:
 
         val visibleCols = 50.0
 
-        val scale = canvas.width.toDouble / (visibleCols * cellPx)
-
-        val visibleRows = canvas.height.toDouble / (cellPx * scale)
+        val scale = Math.floor(canvas.width.toDouble / (visibleCols * cellPx)).max(1.0)
 
         val worldWidth = map.head.length * cellPx
 
@@ -46,10 +44,30 @@ object Drawer:
             rawCameraY
                 .max(0f)
                 .min((worldHeight - viewHeight).toFloat)
-
+        val drawCameraX = Math.floor(cameraX).toFloat
+        val drawCameraY = Math.floor(cameraY).toFloat
         ctx.save()
-        ctx.scale(scale, scale) 
+        ctx.scale(scale, scale)
+        
+        val gradient = ctx.createLinearGradient(
+            0,
+            -drawCameraY,
+            0,
+            worldHeight - drawCameraY
+        )
 
+        gradient.addColorStop(0.0, "#87CEEB")  // celeste
+        gradient.addColorStop(0.4, "#FFB6C1")  // rosa suave
+        gradient.addColorStop(0.7, "#9370DB")  // violeta
+        gradient.addColorStop(1.0, "#0A0A28")  // noche
+
+        ctx.fillStyle = gradient
+        ctx.fillRect(
+            -drawCameraX,
+            -drawCameraY,
+            worldWidth,
+            worldHeight
+        )
         map.zipWithIndex.foreach { case (row, ry) =>
             row.zipWithIndex.foreach { case (cell, cx) =>
                 ctx.fillStyle = cell match {
@@ -57,11 +75,11 @@ object Drawer:
                     case "P" => "#228B22"
                     case "S" => "#FF0000"
                     case "C" => "#FFFF00"
-                    case _   => "#87CEEB"
+                    case "." => "rgba(0,0,0,0)"
                 }
                 ctx.fillRect(
-                    cx * cellPx - cameraX,
-                    ry * cellPx - cameraY,
+                    cx * cellPx - drawCameraX,
+                    ry * cellPx - drawCameraY,
                     cellPx,
                     cellPx
                 )
@@ -71,8 +89,8 @@ object Drawer:
         players.foreach { p =>
             ctx.fillStyle = "#1534e0"
             ctx.fillRect(
-                p.x - cameraX,
-                p.y - cameraY,
+                p.x - drawCameraX,
+                p.y - drawCameraY,
                 9,
                 9
             )
