@@ -250,7 +250,6 @@ object Drawer:
         map.zipWithIndex.foreach { case (row, ry) =>
             row.zipWithIndex.foreach { case (cell, cx) =>
                 ctx.fillStyle = cell match {
-                    case "G" => "#8B4513"
                     case "P" => "#228B22"
                     case "S" => "#FF0000"
                     case "C" => "#FFFF00"
