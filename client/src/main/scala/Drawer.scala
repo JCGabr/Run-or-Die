@@ -11,10 +11,37 @@ object Drawer:
         size: Float
     )
 
+    enum Zone:
+        case Early
+        case Middle
+        case Final
+
     val canvas = document.getElementById("window-game").asInstanceOf[html.Canvas]
     val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]        
     val bg = document.getElementById("bg").asInstanceOf[html.Image]
+    val platformEarly =
+        document.getElementById("platform-early")
+            .asInstanceOf[html.Image]
 
+    val platformMiddle =
+        document.getElementById("platform-middle")
+            .asInstanceOf[html.Image]
+
+    val platformFinal =
+        document.getElementById("platform-final")
+            .asInstanceOf[html.Image]
+
+    val spikeNormal =
+        document.getElementById("spike-normal")
+            .asInstanceOf[html.Image]
+
+    val spikeFinal =
+        document.getElementById("spike-final")
+            .asInstanceOf[html.Image]
+
+    val checkpoint =
+        document.getElementById("checkpoint")
+            .asInstanceOf[html.Image]
     def generateClouds(
         worldWidth: Int,
         worldHeight: Int
@@ -111,6 +138,42 @@ object Drawer:
         ctx.fill()
     }
 
+    def getZone(
+        row: Int,
+        totalRows: Int
+    ): Zone =
+        val progress =
+            row.toFloat / totalRows
+
+        if progress < 1f / 3f then
+            Zone.Early
+        else if progress < 2f / 3f then
+            Zone.Middle
+        else
+            Zone.Final
+
+    def getPlatformSprite(
+        zone: Zone
+    ): html.Image =
+        zone match
+            case Zone.Early =>
+                platformEarly
+
+            case Zone.Middle =>
+                platformMiddle
+
+            case Zone.Final =>
+                platformFinal
+
+
+    def getSpikeSprite(
+        row: Int,
+        totalRows: Int
+    ): html.Image =
+        if row == totalRows - 1 then
+            spikeFinal
+        else
+            spikeNormal
 
     def drawHud(me: Option[PlayerMemento]): Unit =
         me.foreach { p =>
@@ -248,19 +311,46 @@ object Drawer:
         }
 
         map.zipWithIndex.foreach { case (row, ry) =>
+            val zone =
+                getZone(ry, map.length)
+
             row.zipWithIndex.foreach { case (cell, cx) =>
-                ctx.fillStyle = cell match {
-                    case "P" => "#228B22"
-                    case "S" => "#FF0000"
-                    case "C" => "#FFFF00"
-                    case "." => "rgba(0,0,0,0)"
-                }
-                ctx.fillRect(
-                    cx * cellPx - drawCameraX,
-                    ry * cellPx - drawCameraY,
-                    cellPx,
-                    cellPx
-                )
+
+                val drawX =
+                    cx * cellPx - drawCameraX
+
+                val drawY =
+                    ry * cellPx - drawCameraY
+
+                cell match
+                    case "P" =>
+                        ctx.drawImage(
+                            getPlatformSprite(zone),
+                            drawX,
+                            drawY,
+                            cellPx,
+                            cellPx
+                        )
+
+                    case "S" =>
+                        ctx.drawImage(
+                            getSpikeSprite(ry, map.length),
+                            drawX,
+                            drawY,
+                            cellPx,
+                            cellPx
+                        )
+
+                    case "C" =>
+                        ctx.drawImage(
+                            checkpoint,
+                            drawX,
+                            drawY,
+                            cellPx,
+                            cellPx
+                        )
+
+                    case _ =>
             }
         }
 
