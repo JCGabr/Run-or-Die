@@ -28,20 +28,27 @@ case class Player
         val new_time = current_time - dt
         if (new_time <= 0f) return this.copy(current_time = 0f, is_alive = false)
 
-        val vx = if(input.moveLeft) -stats.speed
-                 else if(input.moveRight) stats.speed
-                 else 0f
-        val vy = if(input.jump && is_grounded) stats.jumpForce
-                 else if(is_grounded) 0f
-                 else velocity.y + gravity * dt
+        val vx = if(input.moveLeft) 
+                    -stats.speed
+                 else if(input.moveRight) 
+                    stats.speed
+                 else 
+                    0f
+
+        val vy = if(input.jump && is_grounded) 
+                    stats.jumpForce
+                 else if(is_grounded) 
+                    0f
+                 else 
+                    velocity.y + gravity * dt
     
         val new_velocity = Vector2(vx,vy)
         val proposed = Vector2(coords.x + vx * dt, coords.y + vy * dt)
         val after_physics = resolveCollisions(proposed, new_velocity, map)
 
-        val cell_size  = Constants.BLOCK_SIZE
-        val map_width  = map(0).length * cell_size
-        val map_height = map.length    * cell_size
+        val cell_size = Constants.BLOCK_SIZE
+        val map_width = map(0).length * cell_size
+        val map_height = map.length * cell_size
 
         val clamped = after_physics.copy(
             coords = Vector2(
@@ -49,6 +56,12 @@ case class Player
                 after_physics.coords.y.max(0f).min(map_height - stats.size.y)
             )
         )
+
+        val final_time = 
+            if (after_physics.current_time == current_time)
+                new_time
+            else
+                after_physics.current_time
         /* println(s"""
                 coords: ${coords}
                 proposed: ${proposed}
@@ -57,7 +70,7 @@ case class Player
                 grounded: $is_grounded
                 time: $new_time
                 """) */
-        clamped.copy(current_time = new_time)
+        clamped.copy(current_time = final_time)
     }
     
     def resolveCollisions(proposed: Vector2, vel: Vector2, celdas: Vector[Vector[String]]): Player = {
@@ -66,8 +79,8 @@ case class Player
         def bodyOverlaps(from_x: Float, from_y: Float): Boolean = {
             val col_left  = (from_x / cell_size).toInt
             val col_right = ((from_x + stats.size.x - 1) / cell_size).toInt
-            val row_top   = (from_y / cell_size).toInt
-            val row_bot   = ((from_y + stats.size.y - 1) / cell_size).toInt
+            val row_top = (from_y / cell_size).toInt
+            val row_bot = ((from_y + stats.size.y - 1) / cell_size).toInt
 
             (row_top to row_bot).exists { row =>
                 (col_left to col_right).exists { col =>
@@ -81,10 +94,10 @@ case class Player
         }
 
         def cellAt(from_x: Float, from_y: Float): Option[String] = {
-            val col_left  = (from_x / cell_size).toInt
+            val col_left = (from_x / cell_size).toInt
             val col_right = ((from_x + stats.size.x - 1) / cell_size).toInt
-            val row_top   = (from_y / cell_size).toInt
-            val row_bot   = ((from_y + stats.size.y - 1) / cell_size).toInt
+            val row_top = (from_y / cell_size).toInt
+            val row_bot = ((from_y + stats.size.y - 1) / cell_size).toInt
 
             (for {
                 row <- row_top to row_bot
@@ -131,14 +144,19 @@ case class Player
                 (proposed.x, vel.x)
 
         val resolved = this.copy(
-            coords      = Vector2(final_x, final_y),
-            velocity    = Vector2(final_vx, final_vy),
+            coords = Vector2(final_x, final_y),
+            velocity = Vector2(final_vx, final_vy),
             is_grounded = is_grounded2
         )
 
         cellAt(final_x, final_y) match {
-            case Some("S") => resolved.copy(coords = last_checkpoint, velocity = Vector2(0f, 0f))
-            case Some("C") => resolved.copy(last_checkpoint = Vector2(final_x, final_y))
+            case Some("S") => 
+                    resolved.copy(coords = last_checkpoint, velocity = Vector2(0f, 0f), current_time = (current_time - 1))
+            case Some("C") => 
+                if(final_x > last_checkpoint.x + cell_size * 3)
+                    resolved.copy(last_checkpoint = Vector2(final_x, final_y), current_time = max_time) // TO DO: disminuir tiempo de los demas jugadores
+                else
+                    resolved
             case _ => resolved
         }
     }
