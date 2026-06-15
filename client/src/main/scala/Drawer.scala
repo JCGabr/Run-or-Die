@@ -269,8 +269,8 @@ object Drawer:
             ctx.fillRect(
                 p.x - drawCameraX,
                 p.y - drawCameraY,
-                9,
-                9
+                p.sizeX,
+                p.sizeY
             )
         }
         
