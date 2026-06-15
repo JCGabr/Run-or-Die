@@ -30,30 +30,30 @@ object Main {
             case InLobby => ()
         }
         dom.window.requestAnimationFrame { t =>
-            loop(lobby, currentPhase, currentPlayers, t, current)
+            loop(lobby, current_phase, current_players, t, current)
         }
     }
 
-    private var currentPhase: ClientPhase = InLobby
-    private var currentPlayers: List[PlayerSnap] = List.empty
+    private var current_phase: ClientPhase = InLobby
+    private var current_players: List[PlayerSnap] = List.empty
 
     def dispatch(lobby: dom.WebSocket,msg: ServerMsg, phase: ClientPhase, players: List[PlayerSnap]): Unit = {
         msg match {
             case LobbyUpdate(ps) =>
-                currentPhase = InLobby
+                current_phase = InLobby
                 renderLobby(lobby, ps)
 
             case GameStarted(map, myId) =>
                 //val myId = "local"
-                currentPhase = InGame(map, myId)
+                current_phase = InGame(map, myId)
                 hideLobby()
 
             case GameTick(ps) =>
-                currentPlayers = ps
+                current_players = ps
 
             case GameEnded() =>
-                currentPhase   = InLobby
-                currentPlayers = List.empty
+                current_phase   = InLobby
+                current_players = List.empty
         }
     }
 
@@ -67,16 +67,16 @@ object Main {
             "<h2>Lobby</h2>" +
             ps.map(p => s"<div>${p.name} | ${p.char.getOrElse("-")} | ${if(p.ready) "Ready" else "Pendiente"}</div>").mkString +
             "<hr/>" +
-            Constants.CHARACTERS.keys.map(c =>
-            s"""<button id="char-$c" style="margin:4px;padding:8px 16px">$c</button>"""
+            Constants.CHARACTERS.keys.map(client =>
+            s"""<button id="char-$client" style="margin:4px;padding:8px 16px">$client</button>"""
             ).mkString(" ") +
             """<button id="ready-btn" style="margin-top:8px;padding:12px 32px">¡Listo!</button>"""
 
         Constants.CHARACTERS.keys.foreach { 
-            c =>
-                Option(document.getElementById(s"char-$c")).foreach {
+            client =>
+                Option(document.getElementById(s"char-$client")).foreach {
                     _.asInstanceOf[html.Button].onclick = _ => 
-                        lobby.send(write[ClientMsg](SelectCharacter(c)))
+                        lobby.send(write[ClientMsg](SelectCharacter(client)))
             }
         }
 
