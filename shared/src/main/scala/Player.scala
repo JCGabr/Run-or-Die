@@ -15,7 +15,9 @@ case class Player
     
     stats: PlayerStats,
     is_grounded: Boolean,
-    is_alive: Boolean
+    is_alive: Boolean,
+
+    last_checkpoint : Vector2 = Vector2(0,0)
 )
 {
     def update(input: InputState, dt: Float, map: Vector[Vector[String]]): Player = {
@@ -72,10 +74,25 @@ case class Player
                     row >= 0 && row < celdas.length &&
                     col >= 0 && col < celdas(row).length && {
                         val c = celdas(row)(col)
-                        c == "G" || c == "P"
+                        c == "P"
                     }
                 }
             }
+        }
+
+        def cellAt(from_x: Float, from_y: Float): Option[String] = {
+            val col_left  = (from_x / cell_size).toInt
+            val col_right = ((from_x + stats.size.x - 1) / cell_size).toInt
+            val row_top   = (from_y / cell_size).toInt
+            val row_bot   = ((from_y + stats.size.y - 1) / cell_size).toInt
+
+            (for {
+                row <- row_top to row_bot
+                col <- col_left to col_right
+                if row >= 0 && row < celdas.length && col >= 0 && col < celdas(row).length
+                c = celdas(row)(col)
+                if c == "S" || c == "C"
+            } yield c).headOption
         }
 
         // ── Eje Y suelo
@@ -99,7 +116,6 @@ case class Player
                 (mid_y, mid_vy, is_grounded)
 
         // ── Eje X
-        val proposed_x = if (vel.x > 0) proposed.x else proposed.x
         val snap_col_x = if (vel.x > 0)
             ((proposed.x + stats.size.x) / cell_size).toInt
         else
@@ -114,10 +130,16 @@ case class Player
             else
                 (proposed.x, vel.x)
 
-        this.copy(
+        val resolved = this.copy(
             coords      = Vector2(final_x, final_y),
             velocity    = Vector2(final_vx, final_vy),
             is_grounded = is_grounded2
         )
+
+        cellAt(final_x, final_y) match {
+            case Some("S") => resolved.copy(coords = last_checkpoint, velocity = Vector2(0f, 0f))
+            case Some("C") => resolved.copy(last_checkpoint = Vector2(final_x, final_y))
+            case _ => resolved
+        }
     }
 }
