@@ -4,7 +4,38 @@ import org.scalajs.dom.html
 import org.scalajs.dom.document
 import scala.util.Random
 
+case class PlayerSheets(
+    idle: html.Image,
+    run: html.Image,
+    jump: html.Image
+)
+
+val sheets: Map[String, PlayerSheets] = Map(
+    "Crumb" -> PlayerSheets(
+        document.getElementById("crumb-idle").asInstanceOf[html.Image],
+        document.getElementById("crumb-run").asInstanceOf[html.Image],
+        document.getElementById("crumb-jump").asInstanceOf[html.Image]
+    )
+    /*"Spider" -> PlayerSheets(
+        document.getElementById("spider-idle").asInstanceOf[html.Image],
+        document.getElementById("spider-run").asInstanceOf[html.Image],
+        document.getElementById("spider-jump").asInstanceOf[html.Image]
+    ),
+    "Gnome" -> PlayerSheets(
+        document.getElementById("gnome-idle").asInstanceOf[html.Image],
+        document.getElementById("gnome-run").asInstanceOf[html.Image],
+        document.getElementById("gnome-jump").asInstanceOf[html.Image]
+    ),
+    "Stickman" -> PlayerSheets(
+        document.getElementById("stickman-idle").asInstanceOf[html.Image],
+        document.getElementById("stickman-run").asInstanceOf[html.Image],
+        document.getElementById("stickman-jump").asInstanceOf[html.Image]
+    )*/
+)
+
 object Drawer:
+    private val cloudSeed = 42
+
     case class Cloud(
         x: Float,
         y: Float,
@@ -16,9 +47,18 @@ object Drawer:
         case Middle
         case Final
 
+    enum PlayerAnim:
+        case Idle
+        case Run
+        case Jump
+
     val canvas = document.getElementById("window-game").asInstanceOf[html.Canvas]
     val ctx = canvas.getContext("2d").asInstanceOf[dom.CanvasRenderingContext2D]        
     val bg = document.getElementById("bg").asInstanceOf[html.Image]
+
+    val frameW = 64
+    val frameH = 64
+
     val platformEarly =
         document.getElementById("platform-early")
             .asInstanceOf[html.Image]
@@ -42,11 +82,12 @@ object Drawer:
     val checkpoint =
         document.getElementById("checkpoint")
             .asInstanceOf[html.Image]
+    
     def generateClouds(
         worldWidth: Int,
         worldHeight: Int
     ): List[Cloud] =
-        val random = Random(42)
+        val random = Random(cloudSeed)
 
         (0 until 120).map { _ =>
             Cloud(
@@ -175,6 +216,38 @@ object Drawer:
         else
             spikeNormal
 
+    def getPlayerAnim(p: PlayerMemento): PlayerAnim =
+        if p.vy < -1f then
+            PlayerAnim.Jump
+        else if math.abs(p.vx) > 0.5f then
+            PlayerAnim.Run
+        else
+            PlayerAnim.Idle
+
+    def getFrame(anim: PlayerAnim, t: Float): Int =
+        anim match
+            case PlayerAnim.Idle =>
+                ((t * 8) % 11).toInt
+
+            case PlayerAnim.Run =>
+                ((t * 14) % 12).toInt
+
+            case PlayerAnim.Jump =>
+                0
+    
+    def getPlayerSheet(p: PlayerMemento, anim: PlayerAnim): html.Image =
+        val s = sheets.getOrElse(p.character, sheets("Crumb"))
+
+        anim match
+            case PlayerAnim.Idle => s.idle
+            case PlayerAnim.Run  => s.run
+            case PlayerAnim.Jump => s.jump
+
+    def clamp(v: Int, min: Int, max: Int): Int =
+        if v < min then min
+        else if v > max then max
+        else v
+
     def drawHud(me: Option[PlayerMemento]): Unit =
         me.foreach { p =>
             val current_seconds = p.current_time.toInt
@@ -238,7 +311,7 @@ object Drawer:
             ctx.fillText(max_label, small_box_x + 8, small_box_y + small_box_height - 4)
         }
 
-    def render(map: Vector[Vector[String]], players: List[PlayerMemento], myId: String, delta_time: Double): Unit = {
+    def render(map: Vector[Vector[String]], players: List[PlayerMemento], myId: String, delta_time: Double, animTime: Float): Unit = {
         canvas.width = canvas.clientWidth
         canvas.height = canvas.clientHeight
 
@@ -246,7 +319,7 @@ object Drawer:
         val cellPx =
             (Constants.BLOCK_SIZE * Constants.SEGMENT_SIZE) / 2
 
-        val visibleCols = 50.0
+        val visibleCols = 40.0
 
         val scale = Math.floor(canvas.width.toDouble / (visibleCols * cellPx)).max(1.0)
 
@@ -280,6 +353,7 @@ object Drawer:
         val drawCameraX = Math.floor(cameraX).toFloat
         val drawCameraY = Math.floor(cameraY).toFloat
         ctx.save()
+        dom.console.log(s"scale=$scale camX=$drawCameraX camY=$drawCameraY")
         ctx.scale(scale, scale)
         
         val gradient = ctx.createLinearGradient(
@@ -355,13 +429,47 @@ object Drawer:
         }
 
         players.foreach { p =>
-            ctx.fillStyle = "#1534e0"
-            ctx.fillRect(
-                p.x - drawCameraX,
-                p.y - drawCameraY,
+            val anim = getPlayerAnim(p)
+
+            val t = dom.window.performance.now().toFloat / 1000f
+
+            val rawFrame = getFrame(anim, t)
+
+            val maxFrame =
+                anim match
+                    case PlayerAnim.Idle => 10
+                    case PlayerAnim.Run  => 11
+                    case PlayerAnim.Jump => 0
+
+            val frame =
+                if maxFrame == 0 then 0
+                else clamp(rawFrame, 0, maxFrame)
+
+            val sheet = getPlayerSheet(p, anim)
+
+            val flip =
+                if p.vx < -0.5f then -1 else 1
+
+            ctx.save()
+
+            ctx.translate(p.x - drawCameraX, p.y - drawCameraY)
+
+            if flip == -1 then
+                ctx.scale(-1, 1)
+
+            ctx.drawImage(
+                sheet,
+                frame * frameW,
+                0,
+                frameW,
+                frameH,
+                if flip == -1 then -p.sizeX else 0,
+                0,
                 p.sizeX,
                 p.sizeY
             )
+            
+            ctx.restore()
         }
         
         ctx.restore()
