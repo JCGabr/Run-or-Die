@@ -38,18 +38,22 @@ object Main {
 
         ws.onmessage = e => dispatch(ws, read[ServerMsg](e.data.toString))
 
-        loop(ws, 0, 0)
+        loop(ws, 0, 0, 0f)
     }
 
-    def loop(ws: dom.WebSocket, current: Double, last: Double): Unit = {
+    def loop(ws: dom.WebSocket, current: Double, last: Double, animTime: Float): Unit = {
+        println("LOOP TICK")
+        val dt = ((current - last) / 1000.0).toFloat
+        val newAnimTime = animTime + dt
+        
         current_phase match {
             case InGame(map, myId) =>
                 val dt = (current - last) / 1000.0
-                Drawer.render(map, current_players, myId, dt)
+                Drawer.render(map, current_players, myId, dt, newAnimTime)
             case InLobby => ()
         }
         dom.window.requestAnimationFrame { t =>
-            loop(ws, t, current)
+            loop(ws, t, current, newAnimTime)
         }
     }
 
