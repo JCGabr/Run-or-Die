@@ -193,7 +193,7 @@ object Main extends IOApp.Simple {
                                 }
                             )
 
-                        val memento = penalized_players.values.map(in_game_player => PlayerMemento(in_game_player.id, in_game_player.player.coords.x, in_game_player.player.coords.y, in_game_player.player.is_alive, in_game_player.player.stats.size.x, in_game_player.player.stats.size.y, in_game_player.player.current_time, in_game_player.player.max_time)).toList
+                        val memento = penalized_players.values.map(in_game_player => PlayerMemento(in_game_player.id, in_game_player.player.coords.x, in_game_player.player.coords.y, in_game_player.player.is_alive, in_game_player.player.stats.size.x, in_game_player.player.stats.size.y, in_game_player.player.current_time, in_game_player.player.max_time, clients(in_game_player.id).character.get, in_game_player.player.velocity.x, in_game_player.player.velocity.y)).toList
                         
                         val all_dead = penalized_players.values.forall(!_.player.is_alive)
 
