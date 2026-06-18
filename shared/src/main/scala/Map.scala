@@ -125,7 +125,7 @@ class MapGame
 
     def selectValidSegment(
         familyId: String, 
-        up: Segment, 
+        bottom: Segment, 
         checkpointCooldown: Int, 
         checkpointPlaced: Boolean,
         spikeMultiplier: Float
@@ -206,32 +206,32 @@ class MapGame
                             else if (y == max_y) {
                                 Constants.FAMILIES("death_floor").children("death_floor")
                             } else if (y == 0) {
-                                val left = currentRows(y)(x - 1)
-                                val leftFamily = getFamily(left)
-                                val nextFamily = weightedRandom(adjustWeightByY(leftFamily.right_weights,y))
-                                selectValidSegment(nextFamily, left, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
+                                val right = currentRows(y)(x - 1)
+                                val rightFamily = getFamily(right)
+                                val nextFamily = weightedRandom(adjustWeightByY(rightFamily.right_weights,y))
+                                selectValidSegment(nextFamily, right, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
                             } else if (x == 0) {
-                                val up = currentRows(y - 1)(0)
-                                val upFamily = getFamily(up)
-                                val nextFamily = weightedRandom(adjustWeightByY(upFamily.bottom_weights,y))
-                                selectValidSegment(nextFamily, up, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
+                                val bottom = currentRows(y - 1)(0)
+                                val bottomFamily = getFamily(bottom)
+                                val nextFamily = weightedRandom(adjustWeightByY(bottomFamily.bottom_weights,y))
+                                selectValidSegment(nextFamily, bottom, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
                             } else {
-                                val left  = currentRows(y)(x - 1)
-                                val up = currentRows(y - 1)(x)
-                                val leftFamily = getFamily(left)
-                                val upFamily = getFamily(up)
+                                val right  = currentRows(y)(x - 1)
+                                val bottom = currentRows(y - 1)(x)
+                                val rightFamily = getFamily(right)
+                                val bottomFamily = getFamily(bottom)
 
                                 val new_weights =
-                                    upFamily.bottom_weights.keySet
-                                        .intersect(leftFamily.right_weights.keySet)
-                                        .map(k => k -> ((upFamily.bottom_weights(k) + leftFamily.right_weights(k)) / 2))
+                                    bottomFamily.bottom_weights.keySet
+                                        .intersect(rightFamily.right_weights.keySet)
+                                        .map(k => k -> ((bottomFamily.bottom_weights(k) + rightFamily.right_weights(k)) / 2))
                                         .toMap
                                
                                 if (new_weights.isEmpty) 
-                                    up
+                                    bottom
                                 else 
                                     val nextFamily = weightedRandom(adjustWeightByY(new_weights, y))
-                                    selectValidSegment(nextFamily, up, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
+                                    selectValidSegment(nextFamily, bottom, state.checkpointCooldown, columnState.checkpointPlaced, spikeMultiplier)
                             }
                         }
 
