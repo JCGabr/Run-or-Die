@@ -75,91 +75,72 @@ case class Player
         clamped.copy(current_time = final_time)
     }
     
-    def resolveCollisions(proposed: Vector2, vel: Vector2, celdas: Vector[Vector[String]]): Player = {
-        val cell_size = Constants.BLOCK_SIZE
+    def cellsOverlapping(x: Float, y: Float, width: Float, height: Float, cellSize: Int, cells: Vector[Vector[String]]): Seq[String] = {
+        val colLeft = (x / cellSize).toInt
+        val colRight = ((x + width - 1) / cellSize).toInt
+        val rowTop = (y / cellSize).toInt
+        val rowBottom = ((y + height - 1) / cellSize).toInt
 
-        def bodyOverlaps(from_x: Float, from_y: Float): Boolean = {
-            val col_left  = (from_x / cell_size).toInt
-            val col_right = ((from_x + stats.size.x - 1) / cell_size).toInt
-            val row_top = (from_y / cell_size).toInt
-            val row_bot = ((from_y + stats.size.y - 1) / cell_size).toInt
+        for {
+            row <- rowTop to rowBottom
+            col <- colLeft to colRight
+            if row >= 0 && row < cells.length
+            if col >= 0 && col < cells(row).length
+        } yield cells(row)(col)
+    }
 
-            (row_top to row_bot).exists { row =>
-                (col_left to col_right).exists { col =>
-                    row >= 0 && row < celdas.length &&
-                    col >= 0 && col < celdas(row).length && {
-                        val c = celdas(row)(col)
-                        c == "P"
-                    }
-                }
-            }
-        }
+    def isBlocked(x: Float, y: Float, width: Float, height: Float, cellSize: Int, cells: Vector[Vector[String]]): Boolean =
+        cellsOverlapping(x, y, width, height, cellSize, cells).contains("P")
 
-        def cellAt(from_x: Float, from_y: Float): Option[String] = {
-            val col_left = (from_x / cell_size).toInt
-            val col_right = ((from_x + stats.size.x - 1) / cell_size).toInt
-            val row_top = (from_y / cell_size).toInt
-            val row_bot = ((from_y + stats.size.y - 1) / cell_size).toInt
+    def findHazard(x: Float, y: Float, width: Float, height: Float, cellSize: Int, cells: Vector[Vector[String]]): Option[String] =
+        cellsOverlapping(x, y, width, height, cellSize, cells).find(c => c == "S" || c == "C")
 
-            (for {
-                row <- row_top to row_bot
-                col <- col_left to col_right
-                if row >= 0 && row < celdas.length && col >= 0 && col < celdas(row).length
-                c = celdas(row)(col)
-                if c == "S" || c == "C"
-            } yield c).headOption
-        }
+    def resolveCollisions(proposed: Vector2, vel: Vector2, cells: Vector[Vector[String]]): Player = {
+        val cellSize = Constants.BLOCK_SIZE
+        val width = stats.size.x
+        val height = stats.size.y
 
-        // ── Eje Y suelo
-        val foot_y     = proposed.y + stats.size.y
-        val snap_row_y = (foot_y / cell_size).toInt
+        val footY = proposed.y + height
+        val snapRowFoot = (footY / cellSize).toInt
+        val touchesFloor = vel.y >= 0 && isBlocked(coords.x, proposed.y + 1f, width, height, cellSize, cells)
 
-        val (mid_y, mid_vy, is_grounded) =
-            if (vel.y >= 0 && bodyOverlaps(coords.x, proposed.y + 1f))
-                ((snap_row_y * cell_size - stats.size.y).toFloat, 0f, true)
-            else
-                (proposed.y, vel.y, false)
+        val groundedY = if (touchesFloor) (snapRowFoot * cellSize - height).toFloat else proposed.y
+        val groundedVy = if (touchesFloor) 0f else vel.y
+        val isGrounded = touchesFloor
 
-        // ── Eje Y techo
-        val head_y     = proposed.y
-        val snap_row_h = (head_y / cell_size).toInt
+        val headY = proposed.y
+        val snapRowHead = (headY / cellSize).toInt
+        val touchesCeiling = vel.y < 0 && isBlocked(coords.x, proposed.y, width, height, cellSize, cells)
 
-        val (final_y, final_vy, is_grounded2) =
-            if (vel.y < 0 && bodyOverlaps(coords.x, proposed.y))
-                (((snap_row_h + 1) * cell_size).toFloat, 0f, is_grounded)
-            else
-                (mid_y, mid_vy, is_grounded)
+        val finalY = if (touchesCeiling) ((snapRowHead + 1) * cellSize).toFloat else groundedY
+        val finalVy = if (touchesCeiling) 0f else groundedVy
 
-        // ── Eje X
-        val snap_col_x = if (vel.x > 0)
-            ((proposed.x + stats.size.x) / cell_size).toInt
-        else
-            (proposed.x / cell_size).toInt
+        val snapColX =
+            if (vel.x > 0) ((proposed.x + width) / cellSize).toInt
+            else (proposed.x / cellSize).toInt
 
-        val (final_x, final_vx) =
-            if (vel.x != 0 && bodyOverlaps(proposed.x, final_y))
-                if (vel.x > 0)
-                    ((snap_col_x * cell_size - stats.size.x).toFloat, 0f)
-                else
-                    (((snap_col_x + 1) * cell_size).toFloat, 0f)
-            else
-                (proposed.x, vel.x)
+        val touchesWall = vel.x != 0 && isBlocked(proposed.x, finalY, width, height, cellSize, cells)
+
+        val finalX =
+            if (touchesWall && vel.x > 0) (snapColX * cellSize - width).toFloat
+            else if (touchesWall && vel.x < 0) ((snapColX + 1) * cellSize).toFloat
+            else proposed.x
+
+        val finalVx = if (touchesWall) 0f else vel.x
 
         val resolved = this.copy(
-            coords = Vector2(final_x, final_y),
-            velocity = Vector2(final_vx, final_vy),
-            is_grounded = is_grounded2
+            coords = Vector2(finalX, finalY),
+            velocity = Vector2(finalVx, finalVy),
+            is_grounded = isGrounded
         )
 
-        cellAt(final_x, final_y) match {
-            case Some("S") => 
-                    resolved.copy(coords = last_checkpoint, velocity = Vector2(0f, 0f), current_time = (current_time - 1))
-            case Some("C") => 
-                if(final_x > last_checkpoint.x + cell_size * 3)
-                    resolved.copy(last_checkpoint = Vector2(final_x, final_y), current_time = max_time, claimed_checkpoint = true)
-                else
-                    resolved
-            case _ => resolved
+        findHazard(finalX, finalY, width, height, cellSize, cells) match {
+            case Some("S") =>
+                resolved.copy(coords = last_checkpoint, velocity = Vector2(0f, 0f), current_time = current_time - 1)
+            case Some("C") if finalX > last_checkpoint.x + cellSize * 3 =>
+                resolved.copy(last_checkpoint = Vector2(finalX, finalY), current_time = max_time, claimed_checkpoint = true)
+            case _ =>
+                resolved
         }
     }
 }
