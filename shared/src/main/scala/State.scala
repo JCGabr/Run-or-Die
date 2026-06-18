@@ -350,9 +350,9 @@ object Constants{
     val CHARACTERS: Map[String, PlayerStats] =
     Map(
         "Crumb" -> PlayerStats(speed = 120f, jumpForce = -200f, size = Vector2(9f, 9f)),
-        "Spider" -> PlayerStats(speed = 120, jumpForce = -250f, size = Vector2(9f, 18f)),
+        "Spider" -> PlayerStats(speed = 120, jumpForce = -250f, size = Vector2(9f, 9f)),
         "Gnome" -> PlayerStats(speed = 120, jumpForce = -200, size = Vector2(9f, 9f)),
-        "Stickman" -> PlayerStats(speed = 140, jumpForce = -200, size = Vector2(9f, 18f))
+        "Stickman" -> PlayerStats(speed = 140, jumpForce = -200, size = Vector2(9f, 9f))
     )
 }
 
