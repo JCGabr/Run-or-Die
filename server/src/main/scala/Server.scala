@@ -30,6 +30,7 @@ case class InGame(
     clients: Map[String, Client],
     players: Map[String, InGamePlayer],
     map: Vector[Vector[String]],
+    initialPlayerCount: Int,
     lastTick: Long = System.currentTimeMillis()
 ) extends Phase
 
@@ -196,7 +197,7 @@ object Main extends IOApp.Simple {
             )
 
         case (
-              InGame(clients, players, map, lastTick),
+              InGame(clients, players, map, initialPlayerCount, lastTick),
               Received(id, SendInput(input))
             ) =>
           val newPlayers = players.updatedWith(id) {
@@ -218,11 +219,11 @@ object Main extends IOApp.Simple {
           stateMachine(
             events,
             senders,
-            InGame(clients, newPlayers, map, lastTick),
+            InGame(clients, newPlayers, map, initialPlayerCount, lastTick),
             tickerFiber
           )
 
-        case (InGame(clients, players, map, lastTick), Tick) =>
+        case (InGame(clients, players, map, initialPlayerCount, lastTick), Tick) =>
           val now = System.currentTimeMillis();
           val dt = ((now - lastTick) / 1000f).min(0.1f)
 
@@ -287,30 +288,35 @@ object Main extends IOApp.Simple {
             )
             .toList
 
-          val stop_game = penalized_players.values.count(_.player.is_alive)
-
+          val alivePlayers = penalized_players.values.count(_.player.is_alive)
+          val shouldEnd =
+              if (initialPlayerCount == 1) 
+                alivePlayers == 0
+              else 
+                alivePlayers <= 1
+              
           NetworkState.broadcast(clients, senders, GameTick(memento)) >>
             (
-              if (stop_game == 1)
+              if (shouldEnd)
                 tickerFiber
                   .fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
               else
                 stateMachine(
                   events,
                   senders,
-                  InGame(clients, penalized_players, map, now),
+                  InGame(clients, penalized_players, map, initialPlayerCount, now),
                   tickerFiber
                 )
             )
 
-        case (InGame(clients, players, map, _), Disconnected(id)) =>
+        case (InGame(clients, players, map, initialPlayerCount, _), Disconnected(id)) =>
           val new_clients = clients - id
           val new_players = players - id
           val new_senders = senders - id
           stateMachine(
             events,
             new_senders,
-            InGame(new_clients, new_players, map),
+            InGame(new_clients, new_players, map, initialPlayerCount),
             tickerFiber
           )
 
@@ -355,7 +361,7 @@ object Main extends IOApp.Simple {
           stateMachine(
             events,
             senders,
-            InGame(clients, players, map),
+            InGame(clients, players, map, players.size),
             Some(fiber)
           )
         }
