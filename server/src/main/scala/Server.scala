@@ -287,11 +287,11 @@ object Main extends IOApp.Simple {
             )
             .toList
 
-          val all_dead = penalized_players.values.forall(!_.player.is_alive)
+          val stop_game = penalized_players.values.count(_.player.is_alive)
 
           NetworkState.broadcast(clients, senders, GameTick(memento)) >>
             (
-              if (all_dead)
+              if (stop_game == 1)
                 tickerFiber
                   .fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
               else
