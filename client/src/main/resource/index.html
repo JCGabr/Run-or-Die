@@ -4,9 +4,96 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
 </head>
-<body style="margin: 0; min-height: 100vh; display: grid; place-items: center;">
-  <canvas id="window-game"  style="border: 2px solid black; width:90vw; height:90vh" ></canvas>
+<body>
+
+  <div id="login-overlay" class="overlay">
+    <div class="overlay-card">
+      <div>
+        <p class="screen-eyebrow">Multijugador</p>
+        <h2 class="screen-title">Unirse al juego</h2>
+      </div>
+
+      <div class="form-fields">
+        <div class="form-group">
+          <label for="input-name">Nombre</label>
+          <input id="input-name" type="text" placeholder="Tu nombre" autocomplete="off"/>
+        </div>
+        <div class="form-group">
+          <label for="input-ip">Servidor</label>
+          <input id="input-ip" type="text" placeholder="255.255.255.255" autocomplete="off"/>
+        </div>
+      </div>
+
+      <div>
+        <button id="join-btn">Conectar</button>
+        <p id="login-error"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="lobby-overlay" class="overlay" style="display:none">
+    <div class="overlay-card">
+      <div>
+        <p class="screen-eyebrow">En espera</p>
+        <h2 class="screen-title">Lobby</h2>
+      </div>
+
+      <div id="player-list"></div>
+      <div class="divider"></div>
+      <div id="char-buttons"></div>
+      <button id="ready-btn">Listo</button>
+    </div>
+  </div>
+
+  <canvas id="window-game"></canvas>
+
+  <img id="platform-early"
+      src="assets/platform_early.png"
+      hidden>
+
+  <img id="platform-middle"
+      src="assets/platform_middle.png"
+      hidden>
+
+  <img id="platform-final"
+      src="assets/platform_final.png"
+      hidden>
+
+  <img id="spike-normal"
+      src="assets/spike_normal.png"
+      hidden>
+
+  <img id="spike-final"
+      src="assets/spike_final.png"
+      hidden>
+
+  <img id="checkpoint"
+      src="assets/checkpoint.png"
+      hidden>
+
+  <img id="crumb-idle" src="assets/crumb_idle.png" hidden>
+  <img id="crumb-run" src="assets/crumb_run.png" hidden>
+  <img id="crumb-jump" src="assets/crumb_jump.png" hidden>
+
+<!--
+  <img id="spider-idle" src="assets/spider_idle.png" hidden>
+  <img id="spider-run" src="assets/spider_run.png" hidden>
+  <img id="spider-jump" src="assets/spider_jump.png" hidden>
+
+  <img id="gnome-idle" src="assets/gnome_idle.png" hidden>
+  <img id="gnome-run" src="assets/gnome_run.png" hidden>
+  <img id="gnome-jump" src="assets/gnome_jump.png" hidden>
+
+  <img id="stickman-idle" src="assets/stickman_idle.png" hidden>
+  <img id="stickman-run" src="assets/stickman_run.png" hidden>
+  <img id="stickman-jump" src="assets/stickman_jump.png" hidden>
+-->
+
   <script src="../../../target/scala-3.8.3/client-fastopt/main.js"></script>
 </body>
 </html>
