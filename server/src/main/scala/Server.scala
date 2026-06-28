@@ -28,17 +28,15 @@ sealed trait Phase
 case class Lobby(clients: Map[String, Client]) extends Phase
 case class InGame(
     clients: Map[String, Client],
-    players: Map[String, InGamePlayer],
     map: Vector[Vector[String]],
-    initialPlayerCount: Int,
-    lastTick: Long = System.currentTimeMillis()
+    initialPlayerCount: Int
 ) extends Phase
 
 sealed trait Event
 case class Connected(id: String, send: String => IO[Unit]) extends Event
 case class Disconnected(id: String) extends Event
 case class Received(id: String, msg: ClientMsg) extends Event
-case object Tick extends Event
+case object GameOver extends Event
 
 object NetworkState {
   def broadcast(
@@ -48,14 +46,14 @@ object NetworkState {
   ): IO[Unit] = {
     clients.keys.toList.parTraverse_ { id =>
       senders.get(id) match {
-        case None => IO.unit
+        case None       => IO.unit
         case Some(send) => send(write[ServerMsg](msg))
       }
     }
   }
 
   def lobbyMsg(clients: Map[String, Client]): LobbyUpdate = {
-    return LobbyUpdate(
+    LobbyUpdate(
       clients.values
         .map(client =>
           LobbyPlayer(client.id, client.name, client.character, client.ready)
@@ -65,7 +63,7 @@ object NetworkState {
   }
 
   def expand(mat: Vector[Vector[Segment]]): Vector[Vector[String]] = {
-    return mat.flatMap { row =>
+    mat.flatMap { row =>
       val patterns = row.map(_.pattern)
       (0 until 2).map(y => patterns.flatMap(_(y)))
     }
@@ -74,31 +72,35 @@ object NetworkState {
 
 object Main extends IOApp.Simple {
 
-  def run: IO[Unit] = {
-    Queue.unbounded[IO, Event].flatMap { events =>
-      val server =
+  def run: IO[Unit] =
+    for {
+      events    <- Queue.unbounded[IO, Event]
+      agentsRef <- Ref.of[IO, Map[String, PlayerAgent]](Map.empty)
+
+      server =
         EmberServerBuilder
           .default[IO]
           .withHost(ipv4"0.0.0.0")
           .withPort(port"9000")
-          .withHttpWebSocketApp(routes(_, events).orNotFound)
+          .withHttpWebSocketApp(routes(_, events, agentsRef).orNotFound)
           .build
           .useForever
 
-      val loop = stateMachine(
+      loop = stateMachine(
         events,
+        agentsRef,
         senders = Map.empty,
         phase = Lobby(Map.empty),
-        tickerFiber = None
+        coordinatorFiber = None
       )
 
-      server.both(loop).void
-    }
-  }
+      _ <- server.both(loop).void
+    } yield ()
 
   def routes(
       wsb: WebSocketBuilder2[IO],
-      events: Queue[IO, Event]
+      events: Queue[IO, Event],
+      agentsRef: Ref[IO, Map[String, PlayerAgent]]
   ): HttpRoutes[IO] = {
     HttpRoutes.of[IO] { case GET -> Root / "lobby" =>
       Queue.unbounded[IO, String].flatMap { outQueue =>
@@ -113,7 +115,12 @@ object Main extends IOApp.Simple {
         val fromClient: Pipe[IO, WebSocketFrame, Unit] =
           _.evalMap {
             case WebSocketFrame.Text(text, _) =>
-              events.offer(Received(id, read[ClientMsg](text)))
+              read[ClientMsg](text) match {
+                case SendInput(input) =>
+                  agentsRef.get.flatMap(_.get(id).fold(IO.unit)(_.send(input)))
+                case other =>
+                  events.offer(Received(id, other))
+              }
             case WebSocketFrame.Close(_) =>
               events.offer(Disconnected(id))
             case _ =>
@@ -127,9 +134,10 @@ object Main extends IOApp.Simple {
 
   def stateMachine(
       events: Queue[IO, Event],
+      agentsRef: Ref[IO, Map[String, PlayerAgent]],
       senders: Map[String, String => IO[Unit]],
       phase: Phase,
-      tickerFiber: Option[FiberIO[Unit]]
+      coordinatorFiber: Option[FiberIO[Unit]]
   ): IO[Unit] = {
     events.take.flatMap { event =>
       (phase, event) match {
@@ -144,7 +152,7 @@ object Main extends IOApp.Simple {
             new_senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, new_senders, Lobby(new_clients), tickerFiber)
+            stateMachine(events, agentsRef, new_senders, Lobby(new_clients), coordinatorFiber)
 
         case (Lobby(clients), Disconnected(id)) =>
           val new_clients = clients - id
@@ -155,7 +163,7 @@ object Main extends IOApp.Simple {
             new_senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, new_senders, Lobby(new_clients), tickerFiber)
+            stateMachine(events, agentsRef, new_senders, Lobby(new_clients), coordinatorFiber)
 
         case (Lobby(clients), Received(id, JoinLobby(name))) =>
           val new_clients = clients.updated(id, clients(id).copy(name = name))
@@ -165,7 +173,7 @@ object Main extends IOApp.Simple {
             senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, senders, Lobby(new_clients), tickerFiber)
+            stateMachine(events, agentsRef, senders, Lobby(new_clients), coordinatorFiber)
 
         case (Lobby(clients), Received(id, SelectCharacter(character))) =>
           val new_clients =
@@ -176,7 +184,7 @@ object Main extends IOApp.Simple {
             senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, senders, Lobby(new_clients), tickerFiber)
+            stateMachine(events, agentsRef, senders, Lobby(new_clients), coordinatorFiber)
 
         case (Lobby(clients), Received(id, SetReady(ready))) =>
           val new_clients = clients.updated(id, clients(id).copy(ready = ready))
@@ -191,163 +199,47 @@ object Main extends IOApp.Simple {
           ) >>
             (
               if (allReady)
-                startGame(events, senders, new_clients)
+                startGame(events, agentsRef, senders, new_clients)
               else
-                stateMachine(events, senders, Lobby(new_clients), tickerFiber)
+                stateMachine(events, agentsRef, senders, Lobby(new_clients), coordinatorFiber)
             )
 
-        case (
-              InGame(clients, players, map, initialPlayerCount, lastTick),
-              Received(id, SendInput(input))
-            ) =>
-          val newPlayers = players.updatedWith(id) {
-            case Some(in_game_player) =>
-              val updatedInput = input match {
-                case PressLeft => in_game_player.lastInput.copy(moveLeft = true)
-                case ReleaseLeft =>
-                  in_game_player.lastInput.copy(moveLeft = false)
-                case PressRight =>
-                  in_game_player.lastInput.copy(moveRight = true)
-                case ReleaseRight =>
-                  in_game_player.lastInput.copy(moveRight = false)
-                case PressJump => in_game_player.lastInput.copy(jump = true)
-                case ReleaseJump => in_game_player.lastInput.copy(jump = false)
-              }
-              Some(in_game_player.copy(lastInput = updatedInput))
-            case None => None
-          }
-          stateMachine(
-            events,
-            senders,
-            InGame(clients, newPlayers, map, initialPlayerCount, lastTick),
-            tickerFiber
-          )
-
-        case (
-              InGame(clients, players, map, initialPlayerCount, lastTick),
-              Tick
-            ) =>
-          val now = System.currentTimeMillis();
-          val dt = ((now - lastTick) / 1000f).min(0.1f)
-
-          val updated_players = players.map { case (id, in_game_player) =>
-            id -> in_game_player.copy(player =
-              in_game_player.player.update(in_game_player.lastInput, dt, map)
-            )
-          }
-
-          val claimed_players =
-            updated_players.filter(_._2.player.claimed_checkpoint).keySet
-
-          val penalized_players =
-            if (claimed_players.isEmpty)
-              updated_players
-            else
-              (
-                updated_players.map { case (id, in_game_player) =>
-                  if (!claimed_players(id) && in_game_player.player.is_alive) {
-                    val should_penalize = claimed_players.exists { claimer_id =>
-                      val claimer = updated_players(claimer_id).player
-                      in_game_player.player.coords.x < claimer.last_checkpoint.x + Constants.BLOCK_SIZE
-                    }
-                    if (should_penalize) {
-                      val new_max =
-                        (in_game_player.player.max_time - 1.0f).max(0f)
-                      val new_current =
-                        (in_game_player.player.current_time - 1.0f).max(0f)
-                      id -> in_game_player.copy(player =
-                        in_game_player.player
-                          .copy(max_time = new_max, current_time = new_current)
-                      )
-                    } else {
-                      id -> in_game_player.copy(player =
-                        in_game_player.player.copy(claimed_checkpoint = false)
-                      )
-                    }
-
-                  } else {
-                    id -> in_game_player.copy(player =
-                      in_game_player.player.copy(claimed_checkpoint = false)
-                    )
-                  }
-                }
-              )
-
-          val memento = penalized_players.values
-            .map(in_game_player =>
-              PlayerMemento(
-                in_game_player.id,
-                in_game_player.player.coords.x,
-                in_game_player.player.coords.y,
-                in_game_player.player.is_alive,
-                in_game_player.player.stats.size.x,
-                in_game_player.player.stats.size.y,
-                in_game_player.player.current_time,
-                in_game_player.player.max_time,
-                clients(in_game_player.id).character.get,
-                in_game_player.player.velocity.x,
-                in_game_player.player.velocity.y
-              )
-            )
-            .toList
-
-          val alivePlayers = penalized_players.values.count(_.player.is_alive)
-          val shouldEnd =
-            if (initialPlayerCount == 1)
-              alivePlayers == 0
-            else
-              alivePlayers <= 1
-
-          NetworkState.broadcast(clients, senders, GameTick(memento)) >>
-            (
-              if (shouldEnd)
-                tickerFiber
-                  .fold(IO.unit)(_.cancel) >> endGame(events, senders, clients)
-              else
-                stateMachine(
-                  events,
-                  senders,
-                  InGame(
-                    clients,
-                    penalized_players,
-                    map,
-                    initialPlayerCount,
-                    now
-                  ),
-                  tickerFiber
-                )
-            )
-
-        case (
-              InGame(clients, players, map, initialPlayerCount, _),
-              Disconnected(id)
-            ) =>
+        case (InGame(clients, map, initialPlayerCount), Disconnected(id)) =>
           val new_clients = clients - id
-          val new_players = players - id
           val new_senders = senders - id
-          stateMachine(
-            events,
-            new_senders,
-            InGame(new_clients, new_players, map, initialPlayerCount),
-            tickerFiber
-          )
+
+          agentsRef
+            .modify(m => (m - id, m.get(id)))
+            .flatMap(_.fold(IO.unit)(_.shutdown)) >>
+            stateMachine(
+              events,
+              agentsRef,
+              new_senders,
+              InGame(new_clients, map, initialPlayerCount),
+              coordinatorFiber
+            )
+
+        case (InGame(clients, _, _), GameOver) =>
+          coordinatorFiber.fold(IO.unit)(_.cancel) >>
+            endGame(events, agentsRef, senders, clients)
 
         case _ =>
-          stateMachine(events, senders, phase, tickerFiber)
+          stateMachine(events, agentsRef, senders, phase, coordinatorFiber)
       }
     }
   }
 
   def startGame(
       events: Queue[IO, Event],
+      agentsRef: Ref[IO, Map[String, PlayerAgent]],
       senders: Map[String, String => IO[Unit]],
       clients: Map[String, Client]
   ): IO[Unit] =
-    IO {
-      val rawMap = new MapGame(500, 0, 30, 0).generate()
-      val map = NetworkState.expand(rawMap)
+    for {
+      rawMap <- IO(new MapGame(500, 0, 30, 0).generate())
+      map = NetworkState.expand(rawMap)
 
-      val players = clients.values.zipWithIndex.map { case (client, index) =>
+      agentsList <- clients.values.toList.zipWithIndex.traverse { case (client, index) =>
         val stats = Constants.CHARACTERS(client.character.get)
         val player = Player(
           Vector2(index * 40f, 0f),
@@ -358,35 +250,112 @@ object Main extends IOApp.Simple {
           false,
           true
         )
-        client.id -> InGamePlayer(client.id, player)
-      }.toMap
+        PlayerAgent.spawn(client.id, player).map(client.id -> _)
+      }
+      agents = agentsList.toMap
+      _ <- agentsRef.set(agents)
 
-      (map, players)
-    }.flatMap { case (map, players) =>
-      clients.values.toList.traverse_ { client =>
-        val pos = players(client.id).player.coords
-        senders
-          .get(client.id)
-          .fold(IO.unit)(_(write[ServerMsg](GameStarted(map, client.id))))
-      } >>
-        ticker(events).flatMap { fiber =>
-          stateMachine(
-            events,
-            senders,
-            InGame(clients, players, map, players.size),
-            Some(fiber)
+      _ <- clients.values.toList.traverse_ { client =>
+        senders.get(client.id).fold(IO.unit)(_(write[ServerMsg](GameStarted(map, client.id))))
+      }
+
+      coordinatorFiber <- coordinator(events, agentsRef, senders, clients, map, agents.size).start
+
+      _ <- stateMachine(
+        events,
+        agentsRef,
+        senders,
+        InGame(clients, map, agents.size),
+        Some(coordinatorFiber)
+      )
+    } yield ()
+
+  def coordinator(
+      events: Queue[IO, Event],
+      agentsRef: Ref[IO, Map[String, PlayerAgent]],
+      senders: Map[String, String => IO[Unit]],
+      clients: Map[String, Client],
+      map: Vector[Vector[String]],
+      initialPlayerCount: Int
+  ): IO[Unit] = {
+
+    def tick(lastTick: Long): IO[Unit] =
+      IO.sleep(8.milliseconds) >> {
+        val now = System.currentTimeMillis()
+        val dt = ((now - lastTick) / 1000f).min(0.1f)
+
+        for {
+          agents <- agentsRef.get
+
+          updated <- agents.toList.parTraverse { case (_, agent) =>
+            agent.state.modify { igp =>
+              val moved = igp.copy(player = igp.player.update(igp.lastInput, dt, map))
+              (moved, moved)
+            }
+          }
+
+          claimedIds = updated.filter(_.player.claimed_checkpoint).map(_.id).toSet
+
+          _ <-
+            if (claimedIds.isEmpty) IO.unit
+            else
+              agents.toList.parTraverse_ { case (id, agent) =>
+                if (claimedIds(id))
+                  agent.state.update(igp =>
+                    igp.copy(player = igp.player.copy(claimed_checkpoint = false))
+                  )
+                else
+                  agent.state.update { igp =>
+                    if (!igp.player.is_alive) igp
+                    else {
+                      val shouldPenalize = claimedIds.exists { claimerId =>
+                        val claimer = updated.find(_.id == claimerId).get.player
+                        igp.player.coords.x < claimer.last_checkpoint.x + Constants.BLOCK_SIZE
+                      }
+                      if (shouldPenalize)
+                        igp.copy(player = igp.player.copy(
+                          max_time = (igp.player.max_time - 1f).max(0f),
+                          current_time = (igp.player.current_time - 1f).max(0f)
+                        ))
+                      else igp
+                    }
+                  }
+              }
+
+          finalState <- agentsRef.get.flatMap(_.toList.parTraverse { case (_, agent) => agent.state.get })
+
+          memento = finalState.map(igp =>
+            PlayerMemento(
+              igp.id,
+              igp.player.coords.x,
+              igp.player.coords.y,
+              igp.player.is_alive,
+              igp.player.stats.size.x,
+              igp.player.stats.size.y,
+              igp.player.current_time,
+              igp.player.max_time,
+              clients(igp.id).character.get,
+              igp.player.velocity.x,
+              igp.player.velocity.y
+            )
           )
-        }
-    }
 
-  def ticker(events: Queue[IO, Event]): IO[FiberIO[Unit]] = {
-    (IO.sleep(8.milliseconds) >> events.offer(Tick)).foreverM
-      .as(())
-      .start
+          alivePlayers = finalState.count(_.player.is_alive)
+          shouldEnd =
+            if (initialPlayerCount == 1) alivePlayers == 0
+            else alivePlayers <= 1
+
+          _ <- NetworkState.broadcast(clients, senders, GameTick(memento))
+          _ <- if (shouldEnd) events.offer(GameOver) else tick(now)
+        } yield ()
+      }
+
+    tick(System.currentTimeMillis())
   }
 
   def endGame(
       events: Queue[IO, Event],
+      agentsRef: Ref[IO, Map[String, PlayerAgent]],
       senders: Map[String, String => IO[Unit]],
       clients: Map[String, Client]
   ): IO[Unit] = {
@@ -394,12 +363,14 @@ object Main extends IOApp.Simple {
       id -> client.copy(ready = false, character = None)
     }
 
-    NetworkState.broadcast(resetClients, senders, GameEnded()) >>
+    agentsRef.get.flatMap(_.values.toList.traverse_(_.shutdown)) >>
+      agentsRef.set(Map.empty) >>
+      NetworkState.broadcast(resetClients, senders, GameEnded()) >>
       NetworkState.broadcast(
         resetClients,
         senders,
         NetworkState.lobbyMsg(resetClients)
       ) >>
-      stateMachine(events, senders, Lobby(resetClients), None)
+      stateMachine(events, agentsRef, senders, Lobby(resetClients), None)
   }
 }
