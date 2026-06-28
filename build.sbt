@@ -22,7 +22,8 @@ lazy val client = project
 
         // Library Maven Central org.scala-js
         libraryDependencies ++= Seq(
-            ("org.scala-js" %%% "scalajs-dom" % "2.8.0")
+            ("org.scala-js" %%% "scalajs-dom" % "2.8.0"),
+            "org.typelevel" %%% "cats-effect" % "3.7.0"
         )
     )
 
