@@ -11,22 +11,22 @@ case class PlayerSheets(
 )
 
 val sheets: Map[String, PlayerSheets] = Map(
-  "Crumb" -> PlayerSheets(
+  "Frogman" -> PlayerSheets(
     document.getElementById("crumb-idle").asInstanceOf[html.Image],
     document.getElementById("crumb-run").asInstanceOf[html.Image],
     document.getElementById("crumb-jump").asInstanceOf[html.Image]
   ),
-  "Spider" -> PlayerSheets(
+  "Astronaut" -> PlayerSheets(
     document.getElementById("spider-idle").asInstanceOf[html.Image],
     document.getElementById("spider-run").asInstanceOf[html.Image],
     document.getElementById("spider-jump").asInstanceOf[html.Image]
   ),
-  "Gnome" -> PlayerSheets(
+  "PinkGuy" -> PlayerSheets(
     document.getElementById("gnome-idle").asInstanceOf[html.Image],
     document.getElementById("gnome-run").asInstanceOf[html.Image],
     document.getElementById("gnome-jump").asInstanceOf[html.Image]
   ),
-  "Stickman" -> PlayerSheets(
+  "Tiki" -> PlayerSheets(
     document.getElementById("stickman-idle").asInstanceOf[html.Image],
     document.getElementById("stickman-run").asInstanceOf[html.Image],
     document.getElementById("stickman-jump").asInstanceOf[html.Image]
@@ -317,7 +317,7 @@ object Drawer:
       () => shakeCanvas(),
       () => blurCanvas(),
       () => flashCanvas(),
-      () => spinCanvas(),
+      () => spinCanvas()
     )
 
     val random = scala.util.Random.nextInt(effects.length)

@@ -295,22 +295,22 @@ object Constants {
 
   val CHARACTERS: Map[String, PlayerStats] =
     Map(
-      "Crumb" -> PlayerStats(
+      "Frogman" -> PlayerStats(
         speed = 120f,
         jumpForce = -200f,
         size = Vector2(9f, 9f)
       ),
-      "Spider" -> PlayerStats(
+      "Astronaut" -> PlayerStats(
         speed = 120,
         jumpForce = -250f,
         size = Vector2(9f, 9f)
       ),
-      "Gnome" -> PlayerStats(
+      "PinkGuy" -> PlayerStats(
         speed = 120,
         jumpForce = -200,
         size = Vector2(9f, 9f)
       ),
-      "Stickman" -> PlayerStats(
+      "Tiki" -> PlayerStats(
         speed = 140,
         jumpForce = -200,
         size = Vector2(9f, 9f)
