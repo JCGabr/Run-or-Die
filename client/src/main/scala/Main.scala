@@ -2,90 +2,111 @@ import org.scalajs.dom
 import org.scalajs.dom.html
 import org.scalajs.dom.document
 import upickle.default.*
+import cats.effect.*
+import cats.effect.unsafe.implicits.global
 
 sealed trait ClientPhase
 case object InLobby extends ClientPhase
 case class InGame(map: Vector[Vector[String]], myId: String) extends ClientPhase
 
-object Main {
+private case class ClientState(
+    phase: ClientPhase = InLobby,
+    players: List[PlayerMemento] = List.empty
+)
 
-  private var current_phase: ClientPhase = InLobby
-  private var current_players: List[PlayerMemento] = List.empty
+object Main extends IOApp.Simple {
 
-  def main(args: Array[String]): Unit = {
-    Option(document.getElementById("join-btn")).foreach {
-      _.asInstanceOf[html.Button].onclick = _ => connect()
-    }
-  }
-
-  def connect(): Unit = {
-    val name =
-      document.getElementById("input-name").asInstanceOf[html.Input].value.trim
-    val ip =
-      document.getElementById("input-ip").asInstanceOf[html.Input].value.trim
-
-    if (name.isEmpty || ip.isEmpty) {
-      showLoginError("Completa todos los campos")
-      return
+  def run: IO[Unit] =
+    IO {
+      Option(document.getElementById("join-btn")).foreach {
+        _.asInstanceOf[html.Button].onclick =
+          _ => connect().unsafeRunAndForget()
+      }
     }
 
-    val ws = new dom.WebSocket(s"ws://$ip:9000/lobby")
-
-    InputHandler.init(msg => ws.send(write[ClientMsg](msg)))
-
-    ws.onopen = _ => {
-      hideLogin()
-      ws.send(write[ClientMsg](JoinLobby(name)))
-    }
-
-    ws.onmessage = e => dispatch(ws, read[ServerMsg](e.data.toString))
-
-    loop(ws, 0, 0, 0f)
-  }
+  def connect(): IO[Unit] =
+    for {
+      name <- IO(
+        document
+          .getElementById("input-name")
+          .asInstanceOf[html.Input]
+          .value
+          .trim
+      )
+      ip <- IO(
+        document.getElementById("input-ip").asInstanceOf[html.Input].value.trim
+      )
+      _ <-
+        if (name.isEmpty || ip.isEmpty)
+          IO(showLoginError("Completa todos los campos"))
+        else
+          for {
+            stateRef <- Ref[IO].of(ClientState())
+            ws <- IO(new dom.WebSocket(s"ws://$ip:9000/lobby"))
+            _ <- IO(InputHandler.init(msg => ws.send(write[ClientMsg](msg))))
+            _ <- IO(ws.onopen = _ => {
+              hideLogin()
+              ws.send(write[ClientMsg](JoinLobby(name)))
+            })
+            _ <- IO(ws.onmessage =
+              e =>
+                dispatch(ws, stateRef, read[ServerMsg](e.data.toString))
+                  .unsafeRunAndForget()
+            )
+            _ <- loop(ws, stateRef, 0, 0, 0f)
+          } yield ()
+    } yield ()
 
   def loop(
       ws: dom.WebSocket,
+      stateRef: Ref[IO, ClientState],
       current: Double,
       last: Double,
       animTime: Float
-  ): Unit = {
-    println("LOOP TICK")
-    val dt = ((current - last) / 1000.0).toFloat
-    val newAnimTime = animTime + dt
+  ): IO[Unit] =
+    for {
+      _ <- IO(println("LOOP TICK"))
+      dt <- IO(((current - last) / 1000.0).toFloat)
+      newAnimTime = animTime + dt
+      state <- stateRef.get
+      _ <- state.phase match {
+        case InGame(map, myId) =>
+          IO(
+            Drawer.render(
+              map,
+              state.players,
+              myId,
+              (current - last) / 1000.0,
+              newAnimTime
+            )
+          )
+        case InLobby => IO.unit
+      }
+      _ <- IO(dom.window.requestAnimationFrame { t =>
+        loop(ws, stateRef, t, current, newAnimTime).unsafeRunAndForget()
+      })
+    } yield ()
 
-    current_phase match {
-      case InGame(map, myId) =>
-        val dt = (current - last) / 1000.0
-        Drawer.render(map, current_players, myId, dt, newAnimTime)
-      case InLobby => ()
-    }
-    dom.window.requestAnimationFrame { t =>
-      loop(ws, t, current, newAnimTime)
-    }
-  }
-
-  def dispatch(ws: dom.WebSocket, msg: ServerMsg): Unit = {
+  def dispatch(
+      ws: dom.WebSocket,
+      stateRef: Ref[IO, ClientState],
+      msg: ServerMsg
+  ): IO[Unit] =
     msg match {
       case LobbyUpdate(ps) =>
-        current_phase = InLobby
-        showLobby()
-        showCanvas(false)
-        renderLobby(ws, ps)
+        stateRef.update(_.copy(phase = InLobby)) *>
+          IO { showLobby(); showCanvas(false); renderLobby(ws, ps) }
 
       case GameStarted(map, myId) =>
-        current_phase = InGame(map, myId)
-        hideLobby()
-        showCanvas(true)
+        stateRef.update(_.copy(phase = InGame(map, myId))) *>
+          IO { hideLobby(); showCanvas(true) }
 
       case GameTick(ps) =>
-        current_players = ps
+        stateRef.update(_.copy(players = ps))
 
       case GameEnded() =>
-        current_phase = InLobby
-        current_players = List.empty
-        showCanvas(false)
+        stateRef.set(ClientState()) *> IO(showCanvas(false))
     }
-  }
 
   def renderLobby(ws: dom.WebSocket, ps: List[LobbyPlayer]): Unit = {
 
