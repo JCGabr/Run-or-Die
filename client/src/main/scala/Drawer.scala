@@ -318,7 +318,6 @@ object Drawer:
       () => blurCanvas(),
       () => flashCanvas(),
       () => spinCanvas(),
-      () => invertCanvas()
     )
 
     val random = scala.util.Random.nextInt(effects.length)
