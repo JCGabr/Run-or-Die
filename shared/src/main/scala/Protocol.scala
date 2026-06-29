@@ -21,6 +21,7 @@ case class GameStarted(map: Vector[Vector[String]], myId: String)
     extends ServerMsg
 case class GameTick(players: List[PlayerMemento]) extends ServerMsg
 case class GameEnded() extends ServerMsg
+case class EventPunishment() extends ServerMsg
 
 case class LobbyPlayer(
     id: String,
@@ -28,6 +29,7 @@ case class LobbyPlayer(
     char: Option[String],
     ready: Boolean
 ) derives ReadWriter
+
 case class PlayerMemento(
     id: String,
     x: Float,

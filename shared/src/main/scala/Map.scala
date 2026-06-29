@@ -97,7 +97,7 @@ class MapGame(
           if (platformFamilies(k)) 5.0f
           else if (k == "empty") 1.0f
           else 0.0f
-        //case _ => 1.0f
+        // case _ => 1.0f
       }
       k -> (v * multiplier)
     }
@@ -248,7 +248,6 @@ class MapGame(
                     spikeMultiplier
                   )
               }
-              
 
             ColumnState(
               rows = currentRows.updated(

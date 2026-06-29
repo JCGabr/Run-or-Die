@@ -1,8 +1,8 @@
-// client/src/main/scala/Drawer.scala
 import org.scalajs.dom
 import org.scalajs.dom.html
 import org.scalajs.dom.document
 import scala.util.Random
+import scala.scalajs.js.timers.*
 
 case class PlayerSheets(
     idle: html.Image,
@@ -17,19 +17,19 @@ val sheets: Map[String, PlayerSheets] = Map(
     document.getElementById("crumb-jump").asInstanceOf[html.Image]
   ),
   "Spider" -> PlayerSheets(
-      document.getElementById("spider-idle").asInstanceOf[html.Image],
-      document.getElementById("spider-run").asInstanceOf[html.Image],
-      document.getElementById("spider-jump").asInstanceOf[html.Image]
+    document.getElementById("spider-idle").asInstanceOf[html.Image],
+    document.getElementById("spider-run").asInstanceOf[html.Image],
+    document.getElementById("spider-jump").asInstanceOf[html.Image]
   ),
   "Gnome" -> PlayerSheets(
-      document.getElementById("gnome-idle").asInstanceOf[html.Image],
-      document.getElementById("gnome-run").asInstanceOf[html.Image],
-      document.getElementById("gnome-jump").asInstanceOf[html.Image]
+    document.getElementById("gnome-idle").asInstanceOf[html.Image],
+    document.getElementById("gnome-run").asInstanceOf[html.Image],
+    document.getElementById("gnome-jump").asInstanceOf[html.Image]
   ),
   "Stickman" -> PlayerSheets(
-      document.getElementById("stickman-idle").asInstanceOf[html.Image],
-      document.getElementById("stickman-run").asInstanceOf[html.Image],
-      document.getElementById("stickman-jump").asInstanceOf[html.Image]
+    document.getElementById("stickman-idle").asInstanceOf[html.Image],
+    document.getElementById("stickman-run").asInstanceOf[html.Image],
+    document.getElementById("stickman-jump").asInstanceOf[html.Image]
   )
 )
 
@@ -311,6 +311,58 @@ object Drawer:
         small_box_y + small_box_height - 4
       )
     }
+
+  def randomEffect(): Unit = {
+    val effects = Vector(
+      () => shakeCanvas(),
+      () => blurCanvas(),
+      () => flashCanvas(),
+      () => spinCanvas(),
+      () => invertCanvas()
+    )
+
+    val random = scala.util.Random.nextInt(effects.length)
+    effects(random)()
+  }
+
+  def shakeCanvas(durationMs: Int = 1000): Unit = {
+    val interval = setInterval(16) {
+      val x = (Math.random() * 8 - 4).toInt
+      val y = (Math.random() * 8 - 4).toInt
+      canvas.style.transform = s"translate(${x}px, ${y}px)"
+    }
+
+    setTimeout(durationMs) {
+      clearInterval(interval)
+      canvas.style.transform = "translate(0px, 0px)"
+    }
+  }
+
+  def blurCanvas(durationMs: Int = 1000): Unit = {
+    canvas.style.setProperty("filter", "blur(5px)")
+
+    setTimeout(durationMs) {
+      canvas.style.setProperty("filter", "none")
+    }
+  }
+
+  def spinCanvas(durationMs: Int = 1000): Unit = {
+    canvas.style.transition = "transform 1s ease"
+    canvas.style.transform = "rotate(360deg)"
+
+    setTimeout(durationMs) {
+      canvas.style.transform = "rotate(0deg)"
+      canvas.style.transition = ""
+    }
+  }
+
+  def flashCanvas(durationMs: Int = 1000): Unit = {
+    canvas.style.setProperty("filter", "brightness(2.5)")
+
+    setTimeout(durationMs) {
+      canvas.style.setProperty("filter", "none")
+    }
+  }
 
   def render(
       map: Vector[Vector[String]],
