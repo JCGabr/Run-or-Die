@@ -46,7 +46,7 @@ object NetworkState {
   ): IO[Unit] = {
     clients.keys.toList.parTraverse_ { id =>
       senders.get(id) match {
-        case None       => IO.unit
+        case None => IO.unit
         case Some(send) => send(write[ServerMsg](msg))
       }
     }
@@ -74,7 +74,7 @@ object Main extends IOApp.Simple {
 
   def run: IO[Unit] =
     for {
-      events    <- Queue.unbounded[IO, Event]
+      events <- Queue.unbounded[IO, Event]
       agentsRef <- Ref.of[IO, Map[String, PlayerAgent]](Map.empty)
 
       server =
@@ -152,7 +152,13 @@ object Main extends IOApp.Simple {
             new_senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, agentsRef, new_senders, Lobby(new_clients), coordinatorFiber)
+            stateMachine(
+              events,
+              agentsRef,
+              new_senders,
+              Lobby(new_clients),
+              coordinatorFiber
+            )
 
         case (Lobby(clients), Disconnected(id)) =>
           val new_clients = clients - id
@@ -163,7 +169,13 @@ object Main extends IOApp.Simple {
             new_senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, agentsRef, new_senders, Lobby(new_clients), coordinatorFiber)
+            stateMachine(
+              events,
+              agentsRef,
+              new_senders,
+              Lobby(new_clients),
+              coordinatorFiber
+            )
 
         case (Lobby(clients), Received(id, JoinLobby(name))) =>
           val new_clients = clients.updated(id, clients(id).copy(name = name))
@@ -173,7 +185,13 @@ object Main extends IOApp.Simple {
             senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, agentsRef, senders, Lobby(new_clients), coordinatorFiber)
+            stateMachine(
+              events,
+              agentsRef,
+              senders,
+              Lobby(new_clients),
+              coordinatorFiber
+            )
 
         case (Lobby(clients), Received(id, SelectCharacter(character))) =>
           val new_clients =
@@ -184,7 +202,13 @@ object Main extends IOApp.Simple {
             senders,
             NetworkState.lobbyMsg(new_clients)
           ) >>
-            stateMachine(events, agentsRef, senders, Lobby(new_clients), coordinatorFiber)
+            stateMachine(
+              events,
+              agentsRef,
+              senders,
+              Lobby(new_clients),
+              coordinatorFiber
+            )
 
         case (Lobby(clients), Received(id, SetReady(ready))) =>
           val new_clients = clients.updated(id, clients(id).copy(ready = ready))
@@ -201,7 +225,13 @@ object Main extends IOApp.Simple {
               if (allReady)
                 startGame(events, agentsRef, senders, new_clients)
               else
-                stateMachine(events, agentsRef, senders, Lobby(new_clients), coordinatorFiber)
+                stateMachine(
+                  events,
+                  agentsRef,
+                  senders,
+                  Lobby(new_clients),
+                  coordinatorFiber
+                )
             )
 
         case (InGame(clients, map, initialPlayerCount), Disconnected(id)) =>
@@ -239,27 +269,37 @@ object Main extends IOApp.Simple {
       rawMap <- IO(new MapGame(500, 0, 30, 0).generate())
       map = NetworkState.expand(rawMap)
 
-      agentsList <- clients.values.toList.zipWithIndex.traverse { case (client, index) =>
-        val stats = Constants.CHARACTERS(client.character.get)
-        val player = Player(
-          Vector2(index * 40f, 0f),
-          Vector2(0f, 0f),
-          30f,
-          30f,
-          stats,
-          false,
-          true
-        )
-        PlayerAgent.spawn(client.id, player).map(client.id -> _)
+      agentsList <- clients.values.toList.zipWithIndex.traverse {
+        case (client, index) =>
+          val stats = Constants.CHARACTERS(client.character.get)
+          val player = Player(
+            Vector2(index * 40f, 0f),
+            Vector2(0f, 0f),
+            30f,
+            30f,
+            stats,
+            false,
+            true
+          )
+          PlayerAgent.spawn(client.id, player).map(client.id -> _)
       }
       agents = agentsList.toMap
       _ <- agentsRef.set(agents)
 
       _ <- clients.values.toList.traverse_ { client =>
-        senders.get(client.id).fold(IO.unit)(_(write[ServerMsg](GameStarted(map, client.id))))
+        senders
+          .get(client.id)
+          .fold(IO.unit)(_(write[ServerMsg](GameStarted(map, client.id))))
       }
 
-      coordinatorFiber <- coordinator(events, agentsRef, senders, clients, map, agents.size).start
+      coordinatorFiber <- coordinator(
+        events,
+        agentsRef,
+        senders,
+        clients,
+        map,
+        agents.size
+      ).start
 
       _ <- stateMachine(
         events,
@@ -289,12 +329,16 @@ object Main extends IOApp.Simple {
 
           updated <- agents.toList.parTraverse { case (_, agent) =>
             agent.state.modify { igp =>
-              val moved = igp.copy(player = igp.player.update(igp.lastInput, dt, map))
+              val moved =
+                igp.copy(player = igp.player.update(igp.lastInput, dt, map))
               (moved, moved)
             }
           }
 
-          claimedIds = updated.filter(_.player.claimed_checkpoint).map(_.id).toSet
+          claimedIds = updated
+            .filter(_.player.claimed_checkpoint)
+            .map(_.id)
+            .toSet
 
           _ <-
             if (claimedIds.isEmpty) IO.unit
@@ -302,7 +346,9 @@ object Main extends IOApp.Simple {
               agents.toList.parTraverse_ { case (id, agent) =>
                 if (claimedIds(id))
                   agent.state.update(igp =>
-                    igp.copy(player = igp.player.copy(claimed_checkpoint = false))
+                    igp.copy(player =
+                      igp.player.copy(claimed_checkpoint = false)
+                    )
                   )
                 else
                   agent.state.update { igp =>
@@ -313,16 +359,21 @@ object Main extends IOApp.Simple {
                         igp.player.coords.x < claimer.last_checkpoint.x + Constants.BLOCK_SIZE
                       }
                       if (shouldPenalize)
-                        igp.copy(player = igp.player.copy(
-                          max_time = (igp.player.max_time - 1f).max(0f),
-                          current_time = (igp.player.current_time - 1f).max(0f)
-                        ))
+                        igp.copy(player =
+                          igp.player.copy(
+                            max_time = (igp.player.max_time - 1f).max(0f),
+                            current_time =
+                              (igp.player.current_time - 1f).max(0f)
+                          )
+                        )
                       else igp
                     }
                   }
               }
 
-          finalState <- agentsRef.get.flatMap(_.toList.parTraverse { case (_, agent) => agent.state.get })
+          finalState <- agentsRef.get.flatMap(_.toList.parTraverse {
+            case (_, agent) => agent.state.get
+          })
 
           memento = finalState.map(igp =>
             PlayerMemento(
