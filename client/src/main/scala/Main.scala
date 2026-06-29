@@ -3,13 +3,14 @@ import org.scalajs.dom.html
 import org.scalajs.dom.document
 import upickle.default.*
 import cats.effect.*
+import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 
 sealed trait ClientPhase
 case object InLobby extends ClientPhase
 case class InGame(map: Vector[Vector[String]], myId: String) extends ClientPhase
 
-private case class ClientState(
+case class ClientState(
     phase: ClientPhase = InLobby,
     players: List[PlayerMemento] = List.empty
 )
@@ -41,7 +42,7 @@ object Main extends IOApp.Simple {
           IO(showLoginError("Completa todos los campos"))
         else
           for {
-            stateRef <- Ref[IO].of(ClientState())
+            inbound <- Queue.unbounded[IO, ServerMsg]
             ws <- IO(new dom.WebSocket(s"ws://$ip:9000/lobby"))
             _ <- IO(InputHandler.init(msg => ws.send(write[ClientMsg](msg))))
             _ <- IO(ws.onopen = _ => {
@@ -50,31 +51,32 @@ object Main extends IOApp.Simple {
             })
             _ <- IO(ws.onmessage =
               e =>
-                dispatch(ws, stateRef, read[ServerMsg](e.data.toString))
+                inbound
+                  .offer(read[ServerMsg](e.data.toString))
                   .unsafeRunAndForget()
             )
-            _ <- loop(ws, stateRef, 0, 0, 0f)
+            _ <- loop(ws, inbound, ClientState(), 0, 0, 0f)
           } yield ()
     } yield ()
 
   def loop(
       ws: dom.WebSocket,
-      stateRef: Ref[IO, ClientState],
+      inbound: Queue[IO, ServerMsg],
+      state: ClientState,
       current: Double,
       last: Double,
       animTime: Float
   ): IO[Unit] =
     for {
-      _ <- IO(println("LOOP TICK"))
-      dt <- IO(((current - last) / 1000.0).toFloat)
+      newState <- drainMessages(ws, inbound, state)
+      dt = ((current - last) / 1000.0).toFloat
       newAnimTime = animTime + dt
-      state <- stateRef.get
-      _ <- state.phase match {
+      _ <- newState.phase match {
         case InGame(map, myId) =>
           IO(
             Drawer.render(
               map,
-              state.players,
+              newState.players,
               myId,
               (current - last) / 1000.0,
               newAnimTime
@@ -83,33 +85,47 @@ object Main extends IOApp.Simple {
         case InLobby => IO.unit
       }
       _ <- IO(dom.window.requestAnimationFrame { t =>
-        loop(ws, stateRef, t, current, newAnimTime).unsafeRunAndForget()
+        loop(ws, inbound, newState, t, current, newAnimTime)
+          .unsafeRunAndForget()
       })
     } yield ()
 
-  def dispatch(
+  def drainMessages(
       ws: dom.WebSocket,
-      stateRef: Ref[IO, ClientState],
+      inbound: Queue[IO, ServerMsg],
+      state: ClientState
+  ): IO[ClientState] =
+    inbound.tryTake.flatMap {
+      case None => IO.pure(state)
+      case Some(msg) =>
+        val (newState, sideEffect) = applyMsg(ws, state, msg)
+        sideEffect >> drainMessages(ws, inbound, newState)
+    }
+
+  def applyMsg(
+      ws: dom.WebSocket,
+      state: ClientState,
       msg: ServerMsg
-  ): IO[Unit] =
+  ): (ClientState, IO[Unit]) =
     msg match {
       case LobbyUpdate(ps) =>
-        stateRef.update(_.copy(phase = InLobby)) *>
-          IO { showLobby(); showCanvas(false); renderLobby(ws, ps) }
+        val newState = state.copy(phase = InLobby)
+        val effect = IO { showLobby(); showCanvas(false); renderLobby(ws, ps) }
+        (newState, effect)
 
       case GameStarted(map, myId) =>
-        stateRef.update(_.copy(phase = InGame(map, myId))) *>
-          IO { hideLobby(); showCanvas(true) }
+        val newState = state.copy(phase = InGame(map, myId))
+        val effect = IO { hideLobby(); showCanvas(true) }
+        (newState, effect)
 
       case GameTick(ps) =>
-        stateRef.update(_.copy(players = ps))
+        (state.copy(players = ps), IO.unit)
 
       case GameEnded() =>
-        stateRef.set(ClientState()) *> IO(showCanvas(false))
+        (ClientState(), IO(showCanvas(false)))
     }
 
   def renderLobby(ws: dom.WebSocket, ps: List[LobbyPlayer]): Unit = {
-
     Option(document.getElementById("player-list")).foreach { element =>
       element.innerHTML = ""
       ps.foreach { player =>
@@ -122,14 +138,12 @@ object Main extends IOApp.Simple {
         player.char match {
           case Some(client) =>
             val img = document.createElement("img").asInstanceOf[html.Image]
-            img.src = s"$client.png"
-            img.alt = client
+            img.src = s"$client.png"; img.alt = client
             charArea.appendChild(img)
           case None =>
             val placeholder =
               document.createElement("span").asInstanceOf[html.Element]
-            placeholder.className = "no-char"
-            placeholder.textContent = "?"
+            placeholder.className = "no-char"; placeholder.textContent = "?"
             charArea.appendChild(placeholder)
         }
 
@@ -137,22 +151,19 @@ object Main extends IOApp.Simple {
         info.className = "player-info"
 
         val nameEl = document.createElement("span").asInstanceOf[html.Element]
-        nameEl.className = "player-name"
-        nameEl.textContent = player.name
+        nameEl.className = "player-name"; nameEl.textContent = player.name
 
         val charEl = document.createElement("span").asInstanceOf[html.Element]
-        charEl.className = "player-char"
+        charEl.className = "player-char";
         charEl.textContent = player.char.getOrElse("—")
 
         val statusEl = document.createElement("span").asInstanceOf[html.Element]
         statusEl.className = "player-status"
         statusEl.textContent = if (player.ready) "Listo" else "Pendiente"
 
-        info.appendChild(nameEl)
-        info.appendChild(charEl)
+        info.appendChild(nameEl); info.appendChild(charEl);
         info.appendChild(statusEl)
-        card.appendChild(charArea)
-        card.appendChild(info)
+        card.appendChild(charArea); card.appendChild(info)
         element.appendChild(card)
       }
     }
