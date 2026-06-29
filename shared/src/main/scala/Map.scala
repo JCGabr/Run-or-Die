@@ -97,7 +97,7 @@ class MapGame(
           if (platformFamilies(k)) 5.0f
           else if (k == "empty") 1.0f
           else 0.0f
-        case _ => 1.0f
+        //case _ => 1.0f
       }
       k -> (v * multiplier)
     }
@@ -118,11 +118,6 @@ class MapGame(
   def isCheckpoint(segment: Segment): Boolean = {
     val name = segmentName(segment)
     name.endsWith("_checkpoint")
-    /*name == "platform_bottom_checkpoint"  ||
-        name == "platform_diag1_checkpoint"   ||
-        name == "platform_diag2_checkpoint"   ||
-        name == "platform_cube_bottom_right_checkpoint" ||
-        name == "platform_cube_bottom_left_checkpoint"*/
   }
 
   def isSpike(segment: Segment): Boolean = {
@@ -135,7 +130,6 @@ class MapGame(
 
   def selectValidSegment(
       familyId: String,
-      bottom: Segment,
       checkpointCooldown: Int,
       checkpointPlaced: Boolean,
       spikeMultiplier: Float
@@ -177,9 +171,6 @@ class MapGame(
 
   def generate(): Vector[Vector[Segment]] = {
     val root: Segment = Constants.FAMILIES("empty").children("empty_default")
-    val reserved: Map[(Int, Int), Segment] = Map.empty
-    val protectedCells: Set[(Int, Int)] = Set.empty
-
     val initialState =
       GenerationState(
         rows = Vector.fill(max_y + 1)(Vector.empty[Segment]),
@@ -203,71 +194,61 @@ class MapGame(
           ) { (columnState, y) =>
             val currentRows = columnState.rows
             val segment: Segment =
-              if (reserved.contains((x, y))) {
-                reserved((x, y))
-              } else if (protectedCells.contains((x, y))) {
-                Constants
-                  .FAMILIES("empty")
-                  .children("empty_default")
+              if (y == 0 && x == 0)
+                root
+              else if (y == max_y) {
+                Constants.FAMILIES("death_floor").children("death_floor")
+              } else if (y == 0) {
+                val right = currentRows(y)(x - 1)
+                val rightFamily = getFamily(right)
+                val nextFamily = weightedRandom(
+                  adjustWeightByY(rightFamily.right_weights, y)
+                )
+                selectValidSegment(
+                  nextFamily,
+                  state.checkpointCooldown,
+                  columnState.checkpointPlaced,
+                  spikeMultiplier
+                )
+              } else if (x == 0) {
+                val bottom = currentRows(y - 1)(0)
+                val bottomFamily = getFamily(bottom)
+                val nextFamily = weightedRandom(
+                  adjustWeightByY(bottomFamily.bottom_weights, y)
+                )
+                selectValidSegment(
+                  nextFamily,
+                  state.checkpointCooldown,
+                  columnState.checkpointPlaced,
+                  spikeMultiplier
+                )
               } else {
-                if (y == 0 && x == 0)
-                  root
-                else if (y == max_y) {
-                  Constants.FAMILIES("death_floor").children("death_floor")
-                } else if (y == 0) {
-                  val right = currentRows(y)(x - 1)
-                  val rightFamily = getFamily(right)
-                  val nextFamily = weightedRandom(
-                    adjustWeightByY(rightFamily.right_weights, y)
-                  )
-                  selectValidSegment(
-                    nextFamily,
-                    right,
-                    state.checkpointCooldown,
-                    columnState.checkpointPlaced,
-                    spikeMultiplier
-                  )
-                } else if (x == 0) {
-                  val bottom = currentRows(y - 1)(0)
-                  val bottomFamily = getFamily(bottom)
-                  val nextFamily = weightedRandom(
-                    adjustWeightByY(bottomFamily.bottom_weights, y)
-                  )
-                  selectValidSegment(
-                    nextFamily,
-                    bottom,
-                    state.checkpointCooldown,
-                    columnState.checkpointPlaced,
-                    spikeMultiplier
-                  )
-                } else {
-                  val right = currentRows(y)(x - 1)
-                  val bottom = currentRows(y - 1)(x)
-                  val rightFamily = getFamily(right)
-                  val bottomFamily = getFamily(bottom)
+                val right = currentRows(y)(x - 1)
+                val bottom = currentRows(y - 1)(x)
+                val rightFamily = getFamily(right)
+                val bottomFamily = getFamily(bottom)
 
-                  val new_weights =
-                    bottomFamily.bottom_weights.keySet
-                      .intersect(rightFamily.right_weights.keySet)
-                      .map(k =>
-                        k -> ((bottomFamily.bottom_weights(k) + rightFamily
-                          .right_weights(k)) / 2)
-                      )
-                      .toMap
-
-                  if (new_weights.isEmpty) bottom
-                  else
-                    val nextFamily =
-                      weightedRandom(adjustWeightByY(new_weights, y))
-                    selectValidSegment(
-                      nextFamily,
-                      bottom,
-                      state.checkpointCooldown,
-                      columnState.checkpointPlaced,
-                      spikeMultiplier
+                val new_weights =
+                  bottomFamily.bottom_weights.keySet
+                    .intersect(rightFamily.right_weights.keySet)
+                    .map(k =>
+                      k -> ((bottomFamily.bottom_weights(k) + rightFamily
+                        .right_weights(k)) / 2)
                     )
-                }
+                    .toMap
+
+                if (new_weights.isEmpty) bottom
+                else
+                  val nextFamily =
+                    weightedRandom(adjustWeightByY(new_weights, y))
+                  selectValidSegment(
+                    nextFamily,
+                    state.checkpointCooldown,
+                    columnState.checkpointPlaced,
+                    spikeMultiplier
+                  )
               }
+              
 
             ColumnState(
               rows = currentRows.updated(
