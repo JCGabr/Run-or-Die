@@ -123,6 +123,9 @@ object Main extends IOApp.Simple {
 
       case GameEnded() =>
         (ClientState(), IO(showCanvas(false)))
+
+      case EventPunishment() =>
+        (state, IO(Drawer.randomEffect()))
     }
 
   def renderLobby(ws: dom.WebSocket, ps: List[LobbyPlayer]): Unit = {

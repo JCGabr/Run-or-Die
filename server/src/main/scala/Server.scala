@@ -311,7 +311,20 @@ object Main extends IOApp.Simple {
 
     val newGame = game.copy(players = penalized, lastTick = now)
 
-    NetworkState.broadcast(game.clients, senders, GameTick(memento)) >>
+    val sendPunishments =
+      penalized.toList.traverse_ { case (id, igp) =>
+        if (igp.player.current_time < moved(id).player.current_time)
+          senders
+            .get(id)
+            .fold(IO.unit)(
+              _(write[ServerMsg](EventPunishment()))
+            )
+        else
+          IO.unit
+      }
+
+    sendPunishments >>
+      NetworkState.broadcast(game.clients, senders, GameTick(memento)) >>
       (if (shouldEnd)
          events.offer(GameOver) >> stateMachine(events, senders, newGame)
        else stateMachine(events, senders, newGame))
