@@ -13,8 +13,8 @@ project/
 │   ├── Drawer.scala           ← todo lo que toca canvas/ctx
 │   └── InputHandler.scala     ← teclado, envía mensajes al servidor
 │
-└── server/                    ← Akka HTTP
-    └── Server.scala          ← WebSocket route, rooms, broadcast, ActorSystem
+└── server/                    ← http4s + Cats Effect (Ember)
+    └── Server.scala          ← WebSocket route, Queue[IO, Event], stateMachine
 
 ```
 ## Compilar
